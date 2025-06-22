@@ -1,0 +1,104 @@
+server:
+  port: 8081
+  servlet:
+    context-path: /user-service
+  error:
+    include-message: always
+    include-binding-errors: always
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/thirikkale_user_db
+    username: postgres
+    password: 1111
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 20000
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      leak-detection-threshold: 60000
+  #  cloud:
+  #    compatibility-verifier:
+  #      enabled: false
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+
+  # Security Configuration
+  security:
+    require-ssl: false
+
+jwt:
+  secret: 75533e39c1be679894fc643f6419eef8ce5a90c2042ab40e5504821271567472
+  expiration: 3600000
+  refresh-expiration: 604800000
+
+# Logging Configuration
+logging:
+  level:
+    com.thirikkale: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web.cors: DEBUG
+    org.springframework.security.web.access: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.cache: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/user-service.log
+
+# Management Configuration (Actuator)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+
+#docker run -d -p 6379:6379 --name redis redis
