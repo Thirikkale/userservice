@@ -1,5 +1,6 @@
 package com.thirikkale.userservice.model;
 
+import com.thirikkale.userservice.model.enums.AdminRoleType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -24,14 +25,14 @@ public class AdminRole {
     @Column(name = "admin_id")
     private UUID adminId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @MapsId
-    @JoinColumn(name = "admin_id")
+    @OneToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinColumn(name = "admin_id", referencedColumnName = "user_id")
     private User user;
 
     @NotNull
+    @Enumerated(EnumType.STRING)
     @Column(name = "admin_role")
-    private String adminRole;
+    private AdminRoleType adminRole;
 
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
@@ -43,4 +44,8 @@ public class AdminRole {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    // Add version for optimistic locking
+    @Version
+    private Long version;
 }

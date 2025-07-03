@@ -8,8 +8,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,12 +22,11 @@ import java.util.UUID;
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "user_id")
     private UUID userId;
 
     @Email
-    @NotNull
     @Column(unique = true)
     private String email;
 
@@ -38,7 +35,6 @@ public class User {
     @Column(name = "phone_number", unique = true)
     private String phoneNumber;
 
-    @NotNull
     @Size(min = 8)
     private String password;
 
@@ -47,7 +43,6 @@ public class User {
     @Column(name = "first_name")
     private String firstName;
 
-    @NotNull
     @Size(min = 2, max = 100)
     @Column(name = "last_name")
     private String lastName;
@@ -68,11 +63,49 @@ public class User {
     @Builder.Default
     private Boolean isActive = true;
 
-    @CreationTimestamp
+    @Column(name = "is_phone_verified")
+    @Builder.Default
+    private Boolean isPhoneVerified = false;
+
+    @Column(name = "is_email_verified")
+    @Builder.Default
+    private Boolean isEmailVerified = false;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
+    // Remove manual timestamp management to avoid conflicts
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    // Only set timestamps if they are null (for new entities)
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
+
+        // Set default values only if null
+        if (this.isActive == null) {
+            this.isActive = true;
+        }
+        if (this.isPhoneVerified == null) {
+            this.isPhoneVerified = false;
+        }
+        if (this.isEmailVerified == null) {
+            this.isEmailVerified = false;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

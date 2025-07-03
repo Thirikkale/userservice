@@ -1,23 +1,22 @@
 package com.thirikkale.userservice.service;
 
-import com.thirikkale.userservice.config.JwtConfig;
-import com.thirikkale.userservice.dto.request.LoginRequest;
-import com.thirikkale.userservice.dto.request.RegisterRequest;
+import com.thirikkale.userservice.dto.request.*;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.User;
 import com.thirikkale.userservice.repository.UserRepository;
+import com.thirikkale.userservice.service.FirebaseAuthService.FirebaseUserInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +28,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
-    private final JwtConfig jwtConfig;
+    private final FirebaseAuthService firebaseAuthService;
 
     @Transactional
     @CacheEvict(value = "users", allEntries = true)
@@ -56,59 +55,114 @@ public class AuthService {
                 .emergencyContactName(request.getEmergencyContactName())
                 .emergencyContactPhone(request.getEmergencyContactPhone())
                 .isActive(true)
+                .isEmailVerified(false) // Email verification can be added later
+                .isPhoneVerified(false) // Phone verification via Firebase
                 .build();
 
-        User savedUser = userRepository.save(user);
-        log.info("User registered successfully with ID: {}", savedUser.getUserId());
+        user = userRepository.save(user);
+        log.info("User registered successfully: {}", user.getUserId());
 
-        // Generate JWT token
-        UserDetails userDetails = userDetailsService.loadUserByUsername(savedUser.getEmail());
-        String token = jwtService.generateToken(userDetails);
-
-        return AuthResponse.of(
-                token,
-                jwtConfig.getExpiration(),
-                savedUser.getUserId(),
-                savedUser.getEmail(),
-                savedUser.getFirstName(),
-                savedUser.getLastName()
-        );
+        return generateAuthResponse(user);
     }
 
-    @Cacheable(value = "auth", key = "#request.emailOrPhone")
-    public AuthResponse login(LoginRequest request) {
-        log.info("Attempting to login user: {}", request.getEmailOrPhone());
+    public AuthResponse loginWithPassword(LoginRequest request) {
+        log.info("Attempting password login for: {}", request.getEmailOrPhone());
 
-        // Find user by email or phone
-        User user = userRepository.findByEmail(request.getEmailOrPhone())
-                .or(() -> userRepository.findByPhoneNumber(request.getEmailOrPhone()))
-                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("User not found"));
+        User user = findUserByEmailOrPhone(request.getEmailOrPhone());
+
+        if (!user.getIsActive()) {
+            throw new CustomExceptions.UserNotActiveException("User account is deactivated");
+        }
+
+        if (user.getPassword() == null) {
+            throw new CustomExceptions.InvalidCredentialsException("Password not set for this account. Please use OTP login.");
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmailOrPhone(), request.getPassword())
+            );
+        } catch (Exception e) {
+            throw new CustomExceptions.InvalidCredentialsException("Invalid credentials");
+        }
+
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        log.info("User logged in successfully with password: {}", user.getEmail());
+        return generateAuthResponse(user);
+    }
+
+    // Firebase-based OTP login for existing users
+    @Transactional
+    public AuthResponse loginWithFirebase(String firebaseIdToken) {
+        log.info("Attempting Firebase login");
+
+        // Verify Firebase token and extract user info
+        FirebaseUserInfo firebaseUserInfo = firebaseAuthService.extractUserInfo(firebaseIdToken);
+
+        if (!firebaseUserInfo.isPhoneVerified()) {
+            throw new CustomExceptions.PhoneNotVerifiedException("Phone number not verified in Firebase");
+        }
+
+        // Find existing user by phone number
+        User user = userRepository.findByPhoneNumber(firebaseUserInfo.getPhoneNumber())
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("User not found with phone number"));
 
         if (!user.getIsActive()) {
             throw new CustomExceptions.UserNotActiveException("User account is not active");
         }
 
-        // Authenticate
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        user.getEmail(),
-                        request.getPassword()
-                )
-        );
+        // Update phone verification status and last login
+        user.setIsPhoneVerified(true);
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
 
-        // Generate JWT token
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        String token = jwtService.generateToken(userDetails);
+        log.info("User logged in successfully with Firebase: {}", user.getPhoneNumber());
+        return generateAuthResponse(user);
+    }
 
-        log.info("User logged in successfully: {}", user.getEmail());
+    private User findUserByEmailOrPhone(String emailOrPhone) {
+        return userRepository.findByEmailOrPhoneNumber(emailOrPhone)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("User not found"));
+    }
 
-        return AuthResponse.of(
-                token,
-                jwtConfig.getExpiration(),
-                user.getUserId(),
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName()
-        );
+    private AuthResponse generateAuthResponse(User user) {
+        String userType = determineUserType(user);
+        String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getPhoneNumber(), userType);
+        String refreshToken = jwtService.generateRefreshToken(user.getUserId(), user.getPhoneNumber());
+
+        return AuthResponse.builder()
+                .userId(user.getUserId())
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(3600L)
+                .userType(userType)
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .phoneNumber(user.getPhoneNumber())
+                .email(user.getEmail())
+                .isVerified(user.getIsPhoneVerified())
+                .loginTime(LocalDateTime.now())
+                .build();
+    }
+
+    // Update the determineUserType method:
+
+    private String determineUserType(User user) {
+        // Check if user is a rider
+        if (userRepository.existsRiderByUserId(user.getUserId())) {
+            return "RIDER";
+        }
+
+        // Check if user is a driver
+        if (userRepository.existsDriverByUserId(user.getUserId())) {
+            return "DRIVER";
+        }
+
+        // Check if user is admin (you can add admin role table check here)
+        // For now, assume generic user
+        return "USER";
     }
 }

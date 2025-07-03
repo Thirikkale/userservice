@@ -16,15 +16,17 @@ import java.util.UUID;
 public class UserResponse {
 
     private UUID userId;
-    private String email;
-    private String phoneNumber;
     private String firstName;
     private String lastName;
+    private String phoneNumber;
+    private String email;
     private LocalDate dateOfBirth;
     private String profilePhotoUrl;
     private String emergencyContactName;
     private String emergencyContactPhone;
     private Boolean isActive;
+    private Boolean isPhoneVerified;
+    private Boolean isEmailVerified;
+    private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }

@@ -1,14 +1,12 @@
 package com.thirikkale.userservice.model;
 
+import com.thirikkale.userservice.model.enums.Gender;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -24,14 +22,29 @@ public class Rider {
     @Column(name = "rider_id")
     private UUID riderId;
 
+    // Remove @MapsId and use @JoinColumn instead
     @OneToOne(fetch = FetchType.LAZY)
-    @MapsId
-    @JoinColumn(name = "rider_id")
+    @JoinColumn(name = "rider_id", referencedColumnName = "user_id")
     private User user;
 
-    @Column(precision = 3, scale = 2)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private BigDecimal rating = BigDecimal.ZERO;
+    private Gender gender = Gender.NOT_SPECIFIED;
+
+    @Column(name = "selfie_url")
+    private String selfieUrl;
+
+    @Column(name = "women_only_access")
+    @Builder.Default
+    private Boolean womenOnlyAccess = false;
+
+    @Column(name = "gender_verified")
+    @Builder.Default
+    private Boolean genderVerified = false;
+
+    @Column(name = "rating")
+    @Builder.Default
+    private Double rating = 0.0;
 
     @Column(name = "total_rides")
     @Builder.Default
@@ -44,15 +57,45 @@ public class Rider {
     @Builder.Default
     private String preferredPaymentMethod = "CASH";
 
-    @Column(name = "women_only_preference")
-    @Builder.Default
-    private Boolean womenOnlyPreference = false;
-
-    @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
+
+        // Set default values only if they are null
+        if (this.gender == null) {
+            this.gender = Gender.NOT_SPECIFIED;
+        }
+        if (this.genderVerified == null) {
+            this.genderVerified = false;
+        }
+        if (this.totalRides == null) {
+            this.totalRides = 0;
+        }
+        if (this.rating == null) {
+            this.rating = 0.0;
+        }
+        if (this.womenOnlyAccess == null) {
+            this.womenOnlyAccess = false;
+        }
+        if (this.preferredPaymentMethod == null) {
+            this.preferredPaymentMethod = "CASH";
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

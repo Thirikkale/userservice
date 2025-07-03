@@ -52,6 +52,11 @@ spring:
     redis:
       time-to-live: 600000
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
   # Security Configuration
   security:
     require-ssl: false
@@ -60,6 +65,36 @@ jwt:
   secret: 75533e39c1be679894fc643f6419eef8ce5a90c2042ab40e5504821271567472
   expiration: 3600000
   refresh-expiration: 604800000
+
+# Firebase Configuration (Replace Twilio)
+firebase:
+  project-id: thirikkale-app
+  config:
+    path: firebase-service-account.json
+
+# File Upload Configuration
+file:
+  upload:
+    dir: uploads/
+    max-size: 10485760 # 10MB
+
+# OTP Configuration
+otp:
+  expiration-minutes: 5
+  max-attempts: 3
+
+# Python Integration Configuration (Flask AI Service)
+python:
+  interpreter: python
+  scripts:
+    path: d:/Backend/userservice/python_scripts
+  flask:
+    url: http://127.0.0.1:5000
+    timeout: 30
+  memory:
+    limit: 1GB
+  timeout:
+    seconds: 30
 
 # Logging Configuration
 logging:
@@ -99,6 +134,4 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
-
-
 #docker run -d -p 6379:6379 --name redis redis
