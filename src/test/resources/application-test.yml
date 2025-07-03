@@ -1,0 +1,47 @@
+# filepath: d:\Backend\userservice\src\test\resources\application-test.yml
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+jwt:
+  secret: testsecretkeythatislongenoughforhmacsha256algorithm
+  expiration: 3600000
+  refresh-expiration: 604800000
+
+twilio:
+  account-sid: test-account-sid
+  auth-token: test-auth-token
+  phone-number: +1234567890
+  service-sid: test-service-sid
+
+file:
+  upload:
+    dir: test-uploads/
+    max-size: 10485760
+
+otp:
+  expiration-minutes: 5
+  max-attempts: 3
+
+logging:
+  level:
+    com.thirikkale: DEBUG
+    org.springframework.security: DEBUG

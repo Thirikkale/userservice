@@ -1,0 +1,752 @@
+{
+  "info": {
+    "_postman_id": "thirikkale-complete-api-tests",
+    "name": "Thirikkale Complete API Tests - AI Integrated",
+    "description": "Complete testing collection for Thirikkale User Service with AI Integration",
+    "version": "2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{ACCESS_TOKEN}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Set base URLs",
+          "pm.collectionVariables.set('SPRING_BASE_URL', 'http://localhost:8081/user-service');",
+          "pm.collectionVariables.set('FASTAPI_BASE_URL', 'http://127.0.0.1:5000');"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "🏥 Health Checks",
+      "item": [
+        {
+          "name": "Spring Boot Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Spring Boot is healthy', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/actuator/health",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "FastAPI Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FastAPI AI Service is healthy', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.status).to.eql('healthy');",
+                  "    pm.expect(response.mode).to.be.oneOf(['MOCK', 'REAL']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{FASTAPI_BASE_URL}}/health",
+              "host": ["{{FASTAPI_BASE_URL}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Spring Boot API Documentation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/swagger-ui.html",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["swagger-ui.html"]
+            }
+          }
+        },
+        {
+          "name": "FastAPI Interactive Documentation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{FASTAPI_BASE_URL}}/docs",
+              "host": ["{{FASTAPI_BASE_URL}}"],
+              "path": ["docs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔐 Authentication & Registration",
+      "item": [
+        {
+          "name": "Register Super Admin (First Setup)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('ADMIN_ID', response.adminId);",
+                  "    pm.collectionVariables.set('ADMIN_TOKEN', response.accessToken);",
+                  "    pm.test('Super admin registered successfully', () => {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "        pm.expect(response.adminRole).to.eql('ADMIN_ADMIN');",
+                  "    });",
+                  "} else if (pm.response.code === 409) {",
+                  "    pm.test('Super admin already exists', () => {",
+                  "        pm.expect(pm.response.code).to.eql(409);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@thirikkale.com\",\n  \"password\": \"Admin123!\",\n  \"firstName\": \"Super\",\n  \"lastName\": \"Admin\"\n}"
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/auth/admin/register-super-admin",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "auth", "admin", "register-super-admin"]
+            }
+          }
+        },
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('ADMIN_TOKEN', response.accessToken);",
+                  "    pm.collectionVariables.set('ACCESS_TOKEN', response.accessToken);",
+                  "    pm.test('Admin login successful', () => {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "        pm.expect(response.accessToken).to.not.be.empty;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailOrPhone\": \"admin@thirikkale.com\",\n  \"password\": \"Admin123!\"\n}"
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/auth/admin/login",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "auth", "admin", "login"]
+            }
+          }
+        },
+        {
+          "name": "Register Rider (Firebase)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('RIDER_ID', response.userId);",
+                  "    pm.collectionVariables.set('RIDER_TOKEN', response.accessToken);",
+                  "    pm.collectionVariables.set('ACCESS_TOKEN', response.accessToken);",
+                  "    pm.test('Rider registered successfully', () => {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "        pm.expect(response.role).to.eql('RIDER');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firebaseIdToken\": \"dev-firebase-token-rider-{{$randomInt}}\",\n  \"firstName\": \"Jane\",\n  \"lastName\": \"TestRider\",\n  \"phoneNumber\": \"+94{{$randomInt}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/riders/register",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "riders", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Driver (Firebase)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('DRIVER_ID', response.userId);",
+                  "    pm.collectionVariables.set('DRIVER_TOKEN', response.accessToken);",
+                  "    pm.test('Driver registered successfully', () => {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "        pm.expect(response.role).to.eql('DRIVER');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firebaseIdToken\": \"dev-firebase-token-driver-{{$randomInt}}\",\n  \"firstName\": \"John\",\n  \"lastName\": \"TestDriver\",\n  \"whatsappNumber\": \"+94718865023\",\n  \"phoneNumber\": \"+94{{$randomInt}}\"\n}"
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/drivers/register",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "drivers", "register"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚶‍♀️ Rider AI Services",
+      "item": [
+        {
+          "name": "Upload Rider Selfie for Gender Detection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Gender detection successful', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('detectedGender');",
+                  "    pm.expect(response).to.have.property('confidence');",
+                  "    pm.expect(response.confidence).to.be.a('number');",
+                  "    pm.expect(response.isVerified).to.be.a('boolean');",
+                  "    console.log('Gender Detection Result:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{RIDER_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "selfie",
+                  "type": "file",
+                  "src": "/test_images/rider_selfie.jpg",
+                  "description": "Upload a clear selfie photo for gender detection"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/riders/{{RIDER_ID}}/gender-detection",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "riders", "{{RIDER_ID}}", "gender-detection"]
+            }
+          }
+        },
+        {
+          "name": "Skip Gender Detection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Gender detection skipped', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{RIDER_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/riders/{{RIDER_ID}}/skip-gender-detection",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "riders", "{{RIDER_ID}}", "skip-gender-detection"]
+            }
+          }
+        },
+        {
+          "name": "Upload Rider Profile Photo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Profile photo uploaded successfully', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{RIDER_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": "/test_images/rider_selfie.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/riders/{{RIDER_ID}}/profile-photo",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "riders", "{{RIDER_ID}}", "profile-photo"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚗 Driver AI Services",
+      "item": [
+        {
+          "name": "Upload Driver Selfie",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Driver selfie uploaded successfully', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('status');",
+                  "    console.log('Driver Selfie Upload Result:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{DRIVER_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/test_images/driver_selfie.jpg",
+                  "description": "Driver selfie for face verification"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/drivers/{{DRIVER_ID}}/documents/selfie",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "drivers", "{{DRIVER_ID}}", "documents", "selfie"]
+            }
+          }
+        },
+        {
+          "name": "Upload Driving License (AI OCR + Face Verification)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Driving license processed successfully', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('status');",
+                  "    ",
+                  "    // Test OCR results if available",
+                  "    if (response.ocrResult) {",
+                  "        pm.expect(response.ocrResult).to.have.property('licenseNumber');",
+                  "        console.log('OCR Results:', JSON.stringify(response.ocrResult, null, 2));",
+                  "    }",
+                  "    ",
+                  "    // Test face verification results if available",
+                  "    if (response.faceVerificationResult) {",
+                  "        pm.expect(response.faceVerificationResult).to.have.property('confidence');",
+                  "        console.log('Face Verification:', JSON.stringify(response.faceVerificationResult, null, 2));",
+                  "    }",
+                  "    ",
+                  "    console.log('License Upload Result:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{DRIVER_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/test_images/driving_license.jpg",
+                  "description": "Driving license document for OCR extraction and face verification"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/drivers/{{DRIVER_ID}}/documents/driving-license",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "drivers", "{{DRIVER_ID}}", "documents", "driving-license"]
+            }
+          }
+        },
+        {
+          "name": "Get Driver Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Driver status retrieved successfully', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('isVerified');",
+                  "    console.log('Driver Status:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{DRIVER_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/drivers/{{DRIVER_ID}}",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "drivers", "{{DRIVER_ID}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🤖 Direct FastAPI AI Testing",
+      "item": [
+        {
+          "name": "Test Gender Detection API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Gender detection API works', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('predicted_gender');",
+                  "    pm.expect(response).to.have.property('confidence_score');",
+                  "    console.log('Direct API Gender Detection:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"image_path\": \"test_images/rider_selfie.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{FASTAPI_BASE_URL}}/ai/gender-detection",
+              "host": ["{{FASTAPI_BASE_URL}}"],
+              "path": ["ai", "gender-detection"]
+            }
+          }
+        },
+        {
+          "name": "Test Face Verification API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Face verification API works', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('verified');",
+                  "    pm.expect(response).to.have.property('similarity_score');",
+                  "    console.log('Direct API Face Verification:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"image1_path\": \"test_images/driver_selfie.jpg\",\n  \"image2_path\": \"test_images/license_photo.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{FASTAPI_BASE_URL}}/ai/face-verification",
+              "host": ["{{FASTAPI_BASE_URL}}"],
+              "path": ["ai", "face-verification"]
+            }
+          }
+        },
+        {
+          "name": "Test OCR Extraction API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('OCR extraction API works', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('license_info');",
+                  "    console.log('Direct API OCR Extraction:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"image_path\": \"test_images/driving_license.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{FASTAPI_BASE_URL}}/ai/ocr-extraction",
+              "host": ["{{FASTAPI_BASE_URL}}"],
+              "path": ["ai", "ocr-extraction"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 Admin Operations",
+      "item": [
+        {
+          "name": "Get Admin Statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin statistics retrieved', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    const response = pm.response.json();",
+                  "    console.log('Admin Statistics:', JSON.stringify(response, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ADMIN_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/auth/admin/statistics",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "auth", "admin", "statistics"]
+            }
+          }
+        },
+        {
+          "name": "Get All Admin Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin users list retrieved', () => {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ADMIN_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{SPRING_BASE_URL}}/api/v1/auth/admin/users",
+              "host": ["{{SPRING_BASE_URL}}"],
+              "path": ["api", "v1", "auth", "admin", "users"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "SPRING_BASE_URL",
+      "value": "http://localhost:8081/user-service"
+    },
+    {
+      "key": "FASTAPI_BASE_URL",
+      "value": "http://127.0.0.1:5000"
+    },
+    {
+      "key": "RIDER_ID",
+      "value": ""
+    },
+    {
+      "key": "DRIVER_ID",
+      "value": ""
+    },
+    {
+      "key": "ADMIN_ID",
+      "value": ""
+    },
+    {
+      "key": "RIDER_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "DRIVER_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "ADMIN_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "ACCESS_TOKEN",
+      "value": ""
+    }
+  ]
+}
