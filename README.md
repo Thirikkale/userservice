@@ -1,38 +1,6 @@
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Flutter App   │    │   API Gateway   │    │  UserService    │
-│ (Rider/Driver)  │    │     :8080       │    │     :8081       │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │ POST /register        │                       │
-         │ {firebaseIdToken,     │                       │
-         │  firstName,           │                       │
-         │  lastName}            │                       │
-         ├──────────────────────▶│                       │
-         │                       │ Route to UserService  │
-         │                       ├──────────────────────▶│
-         │                       │                       │
-         │                       │                       │ ┌─────────────────┐
-         │                       │                       │ │ 1. Verify       │
-         │                       │                       │ │    Firebase     │
-         │                       │                       │ │    Token        │
-         │                       │                       │ └─────────────────┘
-         │                       │                       │
-         │                       │                       │ ┌─────────────────┐
-         │                       │                       │ │ 2. Check User   │
-         │                       │                       │ │    Exists?      │
-         │                       │                       │ └─────────────────┘
-         │                       │                       │
-         │                       │                       │ ┌─────────────────┐
-         │                       │                       │ │ 3. Check Role   │
-         │                       │                       │ │    Status       │
-         │                       │                       │ └─────────────────┘
-         │                       │                       │
-         │                       │                       │ ┌─────────────────┐
-         │                       │                       │ │ 4. Handle       │
-         │                       │                       │ │    Scenario     │
-         │                       │                       │ └─────────────────┘
-         │                       │                       │
-         │                       │ Response              │
-         │◀──────────────────────┤◀──────────────────────┤
-         │ {accessToken,         │                       │
-         │  userType: "RIDER"}   │                       │
+Scenario Matrix
+Current Status	Rider App Request	Driver App Request
+New User	✅ Create User + Rider	✅ Create User + Driver
+Rider Only	❌ Block: "Login instead"	✅ Upgrade: Add Driver role
+Driver Only	✅ Upgrade: Add Rider role	❌ Block: "Login instead"
+Both Roles	❌ Block: "Login instead"	❌ Block: "Login instead"
