@@ -30,21 +30,37 @@ public class AuthController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    // PRIMARY LOGIN METHOD - Firebase OTP for Riders/Drivers
+    @PostMapping("/login/firebase")
+    @Operation(
+            summary = "Login with Firebase OTP token",
+            description = "Primary login method for riders and drivers using Firebase phone authentication"
+    )
+    public ResponseEntity<AuthResponse> loginWithFirebase(
+            @RequestParam("firebaseIdToken") String firebaseIdToken) {
+        log.info("Firebase login request received");
+        AuthResponse response = authService.loginWithFirebase(firebaseIdToken);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/login/password")
-    @Operation(summary = "Login with email/phone and password (for admin/support agents)")
+    @Operation(
+            summary = "Login with email/phone and password",
+            description = "Login method for admin users and support agents"
+    )
     public ResponseEntity<AuthResponse> loginWithPassword(@Valid @RequestBody LoginRequest request) {
         log.info("Password login request received for: {}", request.getEmailOrPhone());
         AuthResponse response = authService.loginWithPassword(request);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/login/firebase")
-    @Operation(summary = "Login existing user with Firebase token")
-    public ResponseEntity<AuthResponse> loginWithFirebase(@RequestParam String firebaseIdToken) {
-        log.info("Firebase login request received");
-        AuthResponse response = authService.loginWithFirebase(firebaseIdToken);
-        return ResponseEntity.ok(response);
-    }
+//    @PostMapping("/login/firebase")
+//    @Operation(summary = "Login existing user with Firebase token")
+//    public ResponseEntity<AuthResponse> loginWithFirebase(@RequestParam String firebaseIdToken) {
+//        log.info("Firebase login request received");
+//        AuthResponse response = authService.loginWithFirebase(firebaseIdToken);
+//        return ResponseEntity.ok(response);
+//    }
 
     // Backward compatibility
     @PostMapping("/login")
@@ -53,5 +69,25 @@ public class AuthController {
         log.info("Legacy login request received for: {}", request.getEmailOrPhone());
         AuthResponse response = authService.loginWithPassword(request);
         return ResponseEntity.ok(response);
+    }
+
+
+
+    // TOKEN REFRESH
+    @PostMapping("/refresh")
+    @Operation(summary = "Refresh access token")
+    public ResponseEntity<AuthResponse> refreshToken(@RequestParam String refreshToken) {
+        log.info("Token refresh request received");
+        AuthResponse response = authService.refreshToken(refreshToken);
+        return ResponseEntity.ok(response);
+    }
+
+    // LOGOUT
+    @PostMapping("/logout")
+    @Operation(summary = "Logout user")
+    public ResponseEntity<Void> logout(@RequestParam String token) {
+        log.info("Logout request received");
+        authService.logout(token);
+        return ResponseEntity.ok().build();
     }
 }

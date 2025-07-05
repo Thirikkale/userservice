@@ -114,4 +114,14 @@ public class JwtService {
         final String username = extractPhoneNumber(token);
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
+    // Add this missing method that takes only a token
+    public Boolean validateToken(String token) {
+        try {
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            log.error("Token validation failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
 }

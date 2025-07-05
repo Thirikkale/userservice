@@ -165,4 +165,75 @@ public class AuthService {
         // For now, assume generic user
         return "USER";
     }
+
+    @Transactional
+    public AuthResponse refreshToken(String refreshToken) {
+        log.info("Refreshing access token");
+
+        try {
+            // Validate refresh token - use the single parameter method
+            if (!jwtService.validateToken(refreshToken)) {
+                throw new CustomExceptions.InvalidTokenException("Invalid refresh token");
+            }
+
+            // Extract user info from refresh token
+            String phoneNumber = jwtService.extractPhoneNumber(refreshToken);
+
+            // Find user
+            User user = findUserByEmailOrPhone(phoneNumber);
+
+            if (!user.getIsActive()) {
+                throw new CustomExceptions.UserNotActiveException("User account is not active");
+            }
+
+            // Generate new tokens
+            String newAccessToken = jwtService.generateAccessToken(
+                    user.getUserId(),
+                    user.getPhoneNumber(),
+                    determineUserType(user)
+            );
+            String newRefreshToken = jwtService.generateRefreshToken(
+                    user.getUserId(),
+                    user.getPhoneNumber()
+            );
+
+            return AuthResponse.builder()
+                    .userId(user.getUserId())
+                    .accessToken(newAccessToken)
+                    .refreshToken(newRefreshToken)
+                    .tokenType("Bearer")
+                    .expiresIn(3600L)
+                    .userType(determineUserType(user))
+                    .firstName(user.getFirstName())
+                    .lastName(user.getLastName())
+                    .phoneNumber(user.getPhoneNumber())
+                    .email(user.getEmail())
+                    .isVerified(user.getIsPhoneVerified())
+                    .loginTime(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Token refresh failed: {}", e.getMessage());
+            throw new CustomExceptions.InvalidTokenException("Token refresh failed");
+        }
+    }
+
+    @Transactional
+    public void logout(String token) {
+        try {
+            // Add token to blacklist (you can implement Redis-based blacklist)
+            // For now, just log the logout
+            String phoneNumber = jwtService.extractPhoneNumber(token);
+            log.info("User logged out: {}", phoneNumber);
+
+            // Optional: Update last logout time in database
+            User user = findUserByEmailOrPhone(phoneNumber);
+            // user.setLastLogoutAt(LocalDateTime.now());
+            // userRepository.save(user);
+
+        } catch (Exception e) {
+            log.warn("Logout processing failed: {}", e.getMessage());
+            // Don't throw exception for logout failures
+        }
+    }
 }
