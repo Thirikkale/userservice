@@ -7,11 +7,15 @@ import com.thirikkale.userservice.dto.response.DriverResponse;
 import com.thirikkale.userservice.model.enums.DocumentType;
 import com.thirikkale.userservice.service.DriverDocumentService;
 import com.thirikkale.userservice.service.DriverService;
+import com.thirikkale.userservice.service.MultiRoleAuthService;
+import com.thirikkale.userservice.service.MultiRoleLoginService;
+import com.thirikkale.userservice.exception.CustomExceptions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,21 +28,54 @@ import java.util.UUID;
 @RequestMapping("/api/v1/drivers")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Driver Management", description = "Driver registration and document management")
+@Tag(name = "Driver Management", description = "Driver registration, authentication, document management and operations")
 public class DriverController {
 
     private final DriverService driverService;
     private final DriverDocumentService driverDocumentService;
+    private final MultiRoleAuthService multiRoleAuthService;
+    private final MultiRoleLoginService multiRoleLoginService;
 
     @PostMapping("/register")
     @Operation(
-            summary = "Register a new driver (Step 1)",
-            description = "Register a new driver using Firebase Phone Auth token. " +
-                    "This creates a basic profile. Driver must then upload required documents."
+            summary = "Register for Driver App (Step 1)",
+            description = "Register new driver or upgrade existing rider to driver using Firebase Phone Auth token. " +
+                    "This creates a basic profile. Driver must then upload required documents for verification."
     )
     public ResponseEntity<AuthResponse> registerDriver(@Valid @RequestBody DriverRegistrationRequest request) {
-        log.info("Driver registration request received");
-        AuthResponse response = driverService.registerDriver(request);
+        log.info("Driver app registration request received");
+
+        try {
+            AuthResponse response = multiRoleAuthService.registerUser(
+                    request.getFirebaseIdToken(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    request.getWhatsappNumber(),
+                    MultiRoleAuthService.AppType.DRIVER_APP
+            );
+
+            return ResponseEntity.ok(response);
+
+        } catch (CustomExceptions.UserAlreadyExistsException e) {
+            log.warn("User already exists, prompting login: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(AuthResponse.builder()
+                            .userType("ERROR")
+                            .accessToken(null)
+                            .build());
+        }
+    }
+
+    @PostMapping("/login")
+    @Operation(summary = "Login to Driver App")
+    public ResponseEntity<AuthResponse> loginDriver(@RequestParam String firebaseIdToken) {
+        log.info("Driver app login request received");
+
+        AuthResponse response = multiRoleLoginService.loginForApp(
+                firebaseIdToken,
+                MultiRoleAuthService.AppType.DRIVER_APP
+        );
+
         return ResponseEntity.ok(response);
     }
 

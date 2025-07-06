@@ -1,10 +1,10 @@
 package com.thirikkale.userservice.service;
 
 import com.thirikkale.userservice.exception.CustomExceptions;
+import com.thirikkale.userservice.model.enums.DocumentType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -18,148 +18,174 @@ import java.util.UUID;
 @Slf4j
 public class FileStorageService {
 
-    @Value("${file.upload.dir}")
+    @Value("${file.upload.dir:uploads/}")
     private String uploadDir;
 
-    @Value("${file.upload.max-size}")
-    private long maxFileSize;
-
-    public String storeFile(MultipartFile file, String category, String userId) {
-        // Validate file
-        validateFile(file);
-
-        // Clean filename
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
-        String fileExtension = getFileExtension(originalFileName);
-        String newFileName = UUID.randomUUID().toString() + "." + fileExtension;
-
+    /**
+     * Store driver document with proper directory structure
+     */
+    public String storeDriverDocument(UUID driverId, DocumentType documentType, MultipartFile file) {
         try {
-            // Create directory structure: uploads/category/userId/filename
-            Path uploadPath = Paths.get(uploadDir, category, userId);
-            Files.createDirectories(uploadPath);
+            // Create directory structure: uploads/driver-documents/{driverId}/{documentType}/
+            String documentTypeDir = getDocumentTypeDirectory(documentType);
+            Path targetDir = Paths.get(uploadDir, "driver-documents", driverId.toString(), documentTypeDir);
 
-            // Store file
-            Path filePath = uploadPath.resolve(newFileName);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            // Create directories if they don't exist
+            Files.createDirectories(targetDir);
 
-            String fileUrl = String.format("/%s/%s/%s/%s", uploadDir, category, userId, newFileName);
-            log.info("File stored successfully: {}", fileUrl);
+            // Generate unique filename
+            String originalFilename = file.getOriginalFilename();
+            String extension = getFileExtension(originalFilename);
+            String uniqueFilename = UUID.randomUUID().toString() + extension;
 
-            return fileUrl;
+            // Save file
+            Path targetPath = targetDir.resolve(uniqueFilename);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Return relative path for database storage
+            String relativePath = "/uploads/driver-documents/" + driverId + "/" + documentTypeDir + "/" + uniqueFilename;
+
+            log.info("File stored successfully: {}", relativePath);
+            return relativePath;
+
+        } catch (IOException e) {
+            log.error("Failed to store file for driver {}: {}", driverId, e.getMessage());
+            throw new CustomExceptions.FileStorageException("Failed to store file: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Generic file storage method (backward compatibility)
+     */
+    public String storeFile(MultipartFile file, String directory, String subdirectory) {
+        try {
+            Path targetDir = Paths.get(uploadDir, directory, subdirectory);
+            Files.createDirectories(targetDir);
+
+            String originalFilename = file.getOriginalFilename();
+            String extension = getFileExtension(originalFilename);
+            String uniqueFilename = UUID.randomUUID().toString() + extension;
+
+            Path targetPath = targetDir.resolve(uniqueFilename);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            String relativePath = "/" + directory + "/" + subdirectory + "/" + uniqueFilename;
+            log.info("File stored successfully: {}", relativePath);
+            return relativePath;
 
         } catch (IOException e) {
             log.error("Failed to store file: {}", e.getMessage());
-            throw new CustomExceptions.DocumentUploadException("Failed to store file: " + e.getMessage());
+            throw new CustomExceptions.FileStorageException("Failed to store file: " + e.getMessage());
         }
     }
 
-    private void validateFile(MultipartFile file) {
-        if (file.isEmpty()) {
-            throw new CustomExceptions.DocumentUploadException("File cannot be empty");
-        }
-
-        if (file.getSize() > maxFileSize) {
-            throw new CustomExceptions.DocumentUploadException("File size exceeds maximum limit");
-        }
-
-        String fileName = file.getOriginalFilename();
-        if (fileName == null || fileName.contains("..")) {
-            throw new CustomExceptions.DocumentUploadException("Invalid file name");
-        }
-
-        // Check file extension
-        String fileExtension = getFileExtension(fileName).toLowerCase();
-        if (!isValidFileExtension(fileExtension)) {
-            throw new CustomExceptions.DocumentUploadException("File type not supported");
-        }
-    }
-
-    private String getFileExtension(String fileName) {
-        int lastDotIndex = fileName.lastIndexOf('.');
-        return lastDotIndex > 0 ? fileName.substring(lastDotIndex + 1) : "";
-    }
-
-    private boolean isValidFileExtension(String extension) {
-        String[] allowedExtensions = { "jpg", "jpeg", "png", "pdf", "doc", "docx" };
-        for (String allowed : allowedExtensions) {
-            if (allowed.equals(extension)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public byte[] downloadFile(String fileUrl) throws IOException {
+    /**
+     * Download file content as byte array
+     */
+    public byte[] downloadFile(String fileUrl) {
         try {
             // Remove leading slash if present
-            String cleanUrl = fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl;
+            String cleanPath = fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl;
+            Path filePath = Paths.get(cleanPath);
 
-            // Create file path
-            Path filePath = Paths.get(cleanUrl);
-
-            // Check if file exists
             if (!Files.exists(filePath)) {
-                throw new CustomExceptions.DocumentUploadException("File not found: " + fileUrl);
+                throw new CustomExceptions.FileStorageException("File not found: " + fileUrl);
             }
 
-            // Read file bytes
-            byte[] fileBytes = Files.readAllBytes(filePath);
-            log.debug("Downloaded file: {} ({} bytes)", fileUrl, fileBytes.length);
-
-            return fileBytes;
+            return Files.readAllBytes(filePath);
 
         } catch (IOException e) {
             log.error("Failed to download file {}: {}", fileUrl, e.getMessage());
-            throw e;
+            throw new CustomExceptions.FileStorageException("Failed to download file: " + e.getMessage());
         }
     }
 
-    public void deleteFile(String fileUrl) {
+    /**
+     * Save multipart file to temporary location for Python processing
+     */
+    public Path saveToTempFile(MultipartFile file, String prefix) {
         try {
-            // Remove leading slash if present
-            String cleanUrl = fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl;
+            String extension = getFileExtension(file.getOriginalFilename());
+            Path tempFile = Files.createTempFile(prefix + "_" + UUID.randomUUID(), extension);
 
-            // Create file path
-            Path filePath = Paths.get(cleanUrl);
+            Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+            log.debug("Temporary file created: {}", tempFile);
 
-            // Delete file if exists
-            if (Files.exists(filePath)) {
-                Files.delete(filePath);
-                log.info("Deleted file: {}", fileUrl);
-            } else {
-                log.warn("File not found for deletion: {}", fileUrl);
-            }
+            return tempFile;
 
         } catch (IOException e) {
-            log.error("Failed to delete file {}: {}", fileUrl, e.getMessage());
+            log.error("Failed to create temporary file: {}", e.getMessage());
+            throw new CustomExceptions.FileStorageException("Failed to create temporary file: " + e.getMessage());
         }
     }
 
-    public Path saveToTempFile(MultipartFile file, String prefix) throws IOException {
-        validateFile(file);
-
-        // Get file extension
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
-        String fileExtension = getFileExtension(originalFileName);
-
-        // Create temporary file with prefix and extension
-        Path tempFile = Files.createTempFile(prefix, "." + fileExtension);
-
-        // Copy file content to temporary file
-        Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
-
-        log.debug("Saved temporary file: {} ({} bytes)", tempFile, file.getSize());
-        return tempFile;
-    }
-
+    /**
+     * Delete temporary file
+     */
     public void deleteTempFile(Path tempFile) {
         try {
             if (tempFile != null && Files.exists(tempFile)) {
                 Files.delete(tempFile);
-                log.debug("Deleted temporary file: {}", tempFile);
+                log.debug("Temporary file deleted: {}", tempFile);
             }
         } catch (IOException e) {
             log.warn("Failed to delete temporary file {}: {}", tempFile, e.getMessage());
+        }
+    }
+
+    /**
+     * Get directory name for document type
+     */
+    private String getDocumentTypeDirectory(DocumentType documentType) {
+        switch (documentType) {
+            case SELFIE:
+                return "selfie";
+            case DRIVING_LICENSE:
+                return "driving_license";
+            case REVENUE_LICENSE:
+                return "revenue_license";
+            case VEHICLE_REGISTRATION:
+                return "vehicle_registration";
+            case VEHICLE_INSURANCE:
+                return "vehicle_insurance";
+            default:
+                return "other";
+        }
+    }
+
+    /**
+     * Extract file extension from filename
+     */
+    private String getFileExtension(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return ".jpg"; // Default extension
+        }
+
+        int lastDotIndex = filename.lastIndexOf('.');
+        if (lastDotIndex > 0 && lastDotIndex < filename.length() - 1) {
+            return filename.substring(lastDotIndex);
+        }
+
+        return ".jpg"; // Default extension
+    }
+
+    /**
+     * Validate file type and size
+     */
+    public void validateFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new CustomExceptions.InvalidFileException("File is empty");
+        }
+
+        // Check file size (10MB limit)
+        if (file.getSize() > 10 * 1024 * 1024) {
+            throw new CustomExceptions.InvalidFileException("File size exceeds 10MB limit");
+        }
+
+        // Check file type
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new CustomExceptions.InvalidFileException("Only image files are allowed");
         }
     }
 }

@@ -22,15 +22,19 @@ public class DocumentUploadResponse {
     private int verificationProgress; // 0-100%
     private String nextStep;
 
-    // Face verification specific fields
+    // Face verification specific fields - ENHANCED
     private Double faceMatchScore;
-    private String faceVerificationStatus;
+    private String faceVerificationStatus; // PENDING, IN_PROGRESS, VERIFIED, FAILED, MANUAL_REVIEW
+    private Integer faceVerificationAttempts;
 
-    // OCR extraction specific fields
+    // OCR extraction specific fields - ENHANCED
     private String extractedFirstName;
     private String extractedLastName;
     private String extractedLicenseNumber;
-    private String profileExtractionStatus;
+    private String profileExtractionStatus; // PENDING, IN_PROGRESS, COMPLETED, FAILED
+
+    // Document verification fields
+    private String documentVerificationStatus; // PENDING, IN_PROGRESS, VERIFIED, REJECTED
 
     public static DocumentUploadResponse success(UUID driverId, DocumentType documentType,
                                                  String fileUrl, String message) {
@@ -40,6 +44,8 @@ public class DocumentUploadResponse {
                 .fileUrl(fileUrl)
                 .uploaded(true)
                 .message(message)
+                .verificationProgress(0)
+                .nextStep("Continue uploading documents")
                 .build();
     }
 
@@ -50,6 +56,21 @@ public class DocumentUploadResponse {
                 .documentType(documentType)
                 .uploaded(false)
                 .message(message)
+                .verificationProgress(0)
+                .nextStep("Please retry with a valid file")
                 .build();
+    }
+
+    // Helper method to check if face verification is complete
+    public boolean isFaceVerificationComplete() {
+        return "VERIFIED".equals(faceVerificationStatus) ||
+                "FAILED".equals(faceVerificationStatus) ||
+                "MANUAL_REVIEW".equals(faceVerificationStatus);
+    }
+
+    // Helper method to check if OCR extraction is complete
+    public boolean isOcrExtractionComplete() {
+        return "COMPLETED".equals(profileExtractionStatus) ||
+                "FAILED".equals(profileExtractionStatus);
     }
 }

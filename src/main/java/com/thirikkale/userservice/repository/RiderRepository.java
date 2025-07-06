@@ -21,6 +21,10 @@ public interface RiderRepository extends JpaRepository<Rider, UUID> {
     @Query("SELECT COUNT(r) > 0 FROM Rider r WHERE r.user.phoneNumber = :phoneNumber")
     boolean existsByUser_PhoneNumber(@Param("phoneNumber") String phoneNumber);
 
+    // ENHANCED: Safety check for existing rider by user ID
+    @Query("SELECT COUNT(r) > 0 FROM Rider r WHERE r.riderId = :userId")
+    boolean existsByRiderId(@Param("userId") UUID userId);
+
     @Query("SELECT COUNT(r) FROM Rider r WHERE r.user.isActive = true")
     long countActiveRiders();
 

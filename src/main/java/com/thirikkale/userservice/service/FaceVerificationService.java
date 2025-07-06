@@ -24,30 +24,36 @@ public class FaceVerificationService {
     private final FileStorageService fileStorageService;
 
     public FaceMatchResult verifyFaceMatch(String selfieUrl, String licensePhotoUrl) {
-        log.info("Performing face verification between selfie and license photo using DeepFace");
+        log.info("Performing face verification between selfie and license photo using FastAPI");
+        log.debug("Selfie URL: {}, License URL: {}", selfieUrl, licensePhotoUrl);
 
         try {
             // Download images to temporary files for Python processing
             Path tempSelfie = downloadImageToTempFile(selfieUrl, "selfie");
             Path tempLicense = downloadImageToTempFile(licensePhotoUrl, "license");
 
+            log.info("Downloaded images to temp files: {} and {}", tempSelfie, tempLicense);
+
             try {
                 // Call Python script for face verification
                 JsonNode result = pythonIntegrationService.executePythonScript(
                         "face_verification.py",
                         tempSelfie.toString(),
-                        tempLicense.toString()); // Parse Python result
+                        tempLicense.toString()
+                );
+
+                // Parse Python result
                 FaceVerificationResponse response = parsePythonFaceResult(result);
 
                 log.info("Face verification completed. Confidence: {}, Match: {}",
                         response.getConfidenceScore(), response.isMatch());
 
                 return FaceMatchResult.builder()
-                        .isMatch(response.isMatch())
+                        .match(response.isMatch()) // Fixed: using match instead of isMatch
                         .confidenceScore(response.getConfidenceScore())
                         .selfieUrl(selfieUrl)
                         .licensePhotoUrl(licensePhotoUrl)
-                        .verificationMethod("DEEPFACE_PYTHON")
+                        .verificationMethod("FASTAPI_AI")
                         .distance(response.getDistance())
                         .threshold(response.getThreshold())
                         .model(response.getModel())
@@ -61,27 +67,31 @@ public class FaceVerificationService {
             }
 
         } catch (Exception e) {
-            log.error("Face verification failed: {}", e.getMessage());
+            log.error("Face verification failed: {}", e.getMessage(), e);
             return FaceMatchResult.builder()
-                    .isMatch(false)
+                    .match(false) // Fixed: using match instead of isMatch
                     .confidenceScore(0.0)
                     .selfieUrl(selfieUrl)
                     .licensePhotoUrl(licensePhotoUrl)
-                    .verificationMethod("DEEPFACE_PYTHON")
+                    .verificationMethod("FASTAPI_AI")
                     .errorMessage("Face verification failed: " + e.getMessage())
                     .build();
         }
     }
 
     private Path downloadImageToTempFile(String imageUrl, String prefix) throws IOException {
-        // Create temporary file
+        log.debug("Downloading image from URL: {}", imageUrl);
+
+        // Create temp file
         Path tempFile = Files.createTempFile(prefix + "_" + UUID.randomUUID(), ".jpg");
 
-        // Download image from URL and save to temp file
+        // Download file content
         byte[] imageBytes = fileStorageService.downloadFile(imageUrl);
+
+        // Write to temp file
         Files.write(tempFile, imageBytes);
 
-        log.debug("Downloaded image from {} to temporary file: {}", imageUrl, tempFile);
+        log.debug("Image downloaded to temp file: {}", tempFile);
         return tempFile;
     }
 
@@ -89,28 +99,33 @@ public class FaceVerificationService {
         try {
             if (tempFile != null && Files.exists(tempFile)) {
                 Files.delete(tempFile);
-                log.debug("Cleaned up temporary file: {}", tempFile);
+                log.debug("Cleaned up temp file: {}", tempFile);
             }
         } catch (IOException e) {
-            log.warn("Failed to cleanup temporary file {}: {}", tempFile, e.getMessage());
+            log.warn("Failed to cleanup temp file {}: {}", tempFile, e.getMessage());
         }
     }
 
     private FaceVerificationResponse parsePythonFaceResult(JsonNode result) {
         try {
+            log.debug("Parsing Python face verification result: {}", result);
+
             boolean success = result.get("success").asBoolean(false);
-            boolean isMatch = result.get("is_match").asBoolean(false);
-            double confidenceScore = result.get("confidence_score").asDouble(0.0);
+            boolean isMatch = result.get("verified").asBoolean(false); // Note: FastAPI returns 'verified'
+            double confidenceScore = result.get("similarity_score").asDouble(0.0); // Note: FastAPI returns 'similarity_score'
 
             String errorMessage = null;
             if (!success && result.has("error")) {
                 errorMessage = result.get("error").asText();
             }
 
-            // Optional fields
+            // Optional fields with proper fallbacks
             double distance = result.has("distance") ? result.get("distance").asDouble(0.0) : 0.0;
-            double threshold = result.has("threshold") ? result.get("threshold").asDouble(0.0) : 0.0;
-            String model = result.has("model") ? result.get("model").asText("DeepFace") : "DeepFace";
+            double threshold = result.has("threshold") ? result.get("threshold").asDouble(0.6) : 0.6;
+            String model = result.has("model") ? result.get("model").asText("FastAPI") : "FastAPI";
+
+            log.info("Parsed verification result: success={}, match={}, confidence={}",
+                    success, isMatch, confidenceScore);
 
             return FaceVerificationResponse.builder()
                     .success(success)
@@ -138,14 +153,23 @@ public class FaceVerificationService {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class FaceMatchResult {
-        private boolean isMatch;
-        private double confidenceScore;
+        private Boolean match; // Changed from isMatch to match to fix access issues
+        private Double confidenceScore;
         private String selfieUrl;
         private String licensePhotoUrl;
         private String verificationMethod;
-        private String errorMessage;
-        private double distance;
-        private double threshold;
+        private Double distance;
+        private Double threshold;
         private String model;
+        private String errorMessage;
+
+        // Add helper method for backward compatibility
+        public Boolean isMatch() {
+            return match;
+        }
+
+        public Boolean getIsMatch() {
+            return match;
+        }
     }
 }

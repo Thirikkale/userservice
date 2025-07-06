@@ -7,11 +7,15 @@ import com.thirikkale.userservice.dto.response.GenderDetectionResponse;
 import com.thirikkale.userservice.dto.response.RiderResponse;
 import com.thirikkale.userservice.service.GenderDetectionService;
 import com.thirikkale.userservice.service.RiderService;
+import com.thirikkale.userservice.service.MultiRoleAuthService;
+import com.thirikkale.userservice.service.MultiRoleLoginService;
+import com.thirikkale.userservice.exception.CustomExceptions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,22 +28,55 @@ import java.util.UUID;
 @RequestMapping("/api/v1/riders")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Rider Management", description = "Rider registration and management operations")
+@Tag(name = "Rider Management", description = "Rider registration, authentication and management operations")
 public class RiderController {
 
     private final RiderService riderService;
     private final GenderDetectionService genderDetectionService;
+    private final MultiRoleAuthService multiRoleAuthService;
+    private final MultiRoleLoginService multiRoleLoginService;
 
     @PostMapping("/register")
     @Operation(
-            summary = "Register a new rider (Simplified)",
-            description = "Register a new rider with minimal required information. " +
+            summary = "Register for Rider App",
+            description = "Register new rider or upgrade existing driver to rider with minimal required information. " +
                     "Only Firebase token, first name, and last name are required. " +
                     "Other details can be updated later via profile update endpoint."
     )
     public ResponseEntity<AuthResponse> registerRider(@Valid @RequestBody RiderRegistrationRequest request) {
-        log.info("Simplified rider registration request received");
-        AuthResponse response = riderService.registerRider(request);
+        log.info("Rider app registration request received");
+
+        try {
+            AuthResponse response = multiRoleAuthService.registerUser(
+                    request.getFirebaseIdToken(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    null, // No WhatsApp number for riders
+                    MultiRoleAuthService.AppType.RIDER_APP
+            );
+
+            return ResponseEntity.ok(response);
+
+        } catch (CustomExceptions.UserAlreadyExistsException e) {
+            log.warn("User already exists, prompting login: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(AuthResponse.builder()
+                            .userType("ERROR")
+                            .accessToken(null)
+                            .build());
+        }
+    }
+
+    @PostMapping("/login")
+    @Operation(summary = "Login to Rider App")
+    public ResponseEntity<AuthResponse> loginRider(@RequestParam String firebaseIdToken) {
+        log.info("Rider app login request received");
+
+        AuthResponse response = multiRoleLoginService.loginForApp(
+                firebaseIdToken,
+                MultiRoleAuthService.AppType.RIDER_APP
+        );
+
         return ResponseEntity.ok(response);
     }
 

@@ -1,12 +1,7 @@
 package com.thirikkale.userservice.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -16,18 +11,18 @@ import java.util.UUID;
 @Entity
 @Table(name = "drivers")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@EqualsAndHashCode(callSuper = false)
 public class Driver {
 
     @Id
     @Column(name = "driver_id")
-    private UUID driverId;
+    private UUID driverId; // TPT: This will be set manually to match User's userId
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
-    @MapsId
-    @JoinColumn(name = "driver_id")
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.REFRESH)
+    @JoinColumn(name = "driver_id", referencedColumnName = "user_id")
     private User user;
 
     @Column(name = "is_available")
@@ -119,13 +114,27 @@ public class Driver {
     @Builder.Default
     private Integer faceVerificationAttempts = 0;
 
-    @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     // Helper methods
     public boolean isFullyVerified() {
@@ -140,10 +149,14 @@ public class Driver {
 
     public int getVerificationProgress() {
         int progress = 0;
-        if (isDocumentsUploaded) progress += 25;
-        if ("COMPLETED".equals(profileExtractionStatus)) progress += 25;
-        if ("VERIFIED".equals(documentVerificationStatus)) progress += 25;
-        if ("VERIFIED".equals(faceVerificationStatus)) progress += 25;
+        if (isDocumentsUploaded)
+            progress += 25;
+        if ("COMPLETED".equals(profileExtractionStatus))
+            progress += 25;
+        if ("VERIFIED".equals(documentVerificationStatus))
+            progress += 25;
+        if ("VERIFIED".equals(faceVerificationStatus))
+            progress += 25;
         return progress;
     }
 }

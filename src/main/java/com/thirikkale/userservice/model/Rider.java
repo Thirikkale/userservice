@@ -2,10 +2,7 @@ package com.thirikkale.userservice.model;
 
 import com.thirikkale.userservice.model.enums.Gender;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -13,17 +10,17 @@ import java.util.UUID;
 @Entity
 @Table(name = "riders")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@EqualsAndHashCode(callSuper = false)
 public class Rider {
 
     @Id
     @Column(name = "rider_id")
-    private UUID riderId;
+    private UUID riderId; // TPT: This will be set manually to match User's userId
 
-    // Remove @MapsId and use @JoinColumn instead
-    @OneToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.REFRESH)
     @JoinColumn(name = "rider_id", referencedColumnName = "user_id")
     private User user;
 

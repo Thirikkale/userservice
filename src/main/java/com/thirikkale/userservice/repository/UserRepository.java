@@ -11,9 +11,23 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
+
 public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByPhoneNumber(String phoneNumber);
+
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Rider r WHERE r.user.phoneNumber = :phoneNumber")
+    boolean hasRiderRole(@Param("phoneNumber") String phoneNumber);
+
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM Driver d WHERE d.user.phoneNumber = :phoneNumber")
+    boolean hasDriverRole(@Param("phoneNumber") String phoneNumber);
+
+    // Get user with both role flags
+    @Query("SELECT u, " +
+            "(SELECT COUNT(r) FROM Rider r WHERE r.user.userId = u.userId) as hasRider, " +
+            "(SELECT COUNT(d) FROM Driver d WHERE d.user.userId = u.userId) as hasDriver " +
+            "FROM User u WHERE u.phoneNumber = :phoneNumber")
+    Object[] findUserWithRoles(@Param("phoneNumber") String phoneNumber);
 
     Optional<User> findByEmail(String email);
 

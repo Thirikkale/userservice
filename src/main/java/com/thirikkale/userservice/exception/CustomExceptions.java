@@ -2,6 +2,12 @@ package com.thirikkale.userservice.exception;
 
 public class CustomExceptions {
 
+    public static class UnauthorizedAppAccessException extends RuntimeException {
+        public UnauthorizedAppAccessException(String message) {
+            super(message);
+        }
+    }
+
     public static class UserAlreadyExistsException extends RuntimeException {
         public UserAlreadyExistsException(String message) {
             super(message);

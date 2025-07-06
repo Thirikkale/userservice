@@ -19,6 +19,13 @@ public interface DriverRepository extends JpaRepository<Driver, UUID> {
     @Query("SELECT d FROM Driver d JOIN FETCH d.user WHERE d.user.phoneNumber = :phoneNumber")
     Optional<Driver> findByPhoneNumber(@Param("phoneNumber") String phoneNumber);
 
+    @Query("SELECT COUNT(d) > 0 FROM Driver d WHERE d.user.phoneNumber = :phoneNumber")
+    boolean existsByUser_PhoneNumber(@Param("phoneNumber") String phoneNumber);
+
+    // ENHANCED: Safety check for existing driver by user ID
+    @Query("SELECT COUNT(d) > 0 FROM Driver d WHERE d.driverId = :userId")
+    boolean existsByDriverId(@Param("userId") UUID userId);
+
     @Query("SELECT d FROM Driver d JOIN FETCH d.user WHERE d.isAvailable = true AND d.isVerified = true AND d.user.isActive = true")
     List<Driver> findAllAvailableAndVerified();
 
@@ -53,7 +60,7 @@ public interface DriverRepository extends JpaRepository<Driver, UUID> {
     @Query("SELECT COUNT(d) FROM Driver d WHERE d.faceVerificationStatus = 'MANUAL_REVIEW'")
     long countDriversPendingManualReview();
 
-    boolean existsByUser_PhoneNumber(String phoneNumber);
     boolean existsByLicenseNumber(String licenseNumber);
+
     boolean existsByVehicleRegistration(String vehicleRegistration);
 }
