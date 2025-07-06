@@ -88,8 +88,8 @@ python:
   interpreter: python
   scripts:
     path: d:/Backend/userservice/python_scripts
-  flask:
-    url: http://127.0.0.1:5000
+  fastapi:
+    url: http://127.0.0.1:8001
     timeout: 200
   memory:
     limit: 1GB
