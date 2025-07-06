@@ -74,7 +74,7 @@ public class RiderController {
     )
     @PreAuthorize("hasRole('RIDER')")
     public ResponseEntity<GenderDetectionResponse> uploadSelfieForGenderDetection(
-            @PathVariable UUID riderId,
+            @PathVariable("riderId") UUID riderId,
             @RequestParam("selfie") MultipartFile selfieFile) {
         log.info("Optional gender detection request for rider: {}", riderId);
         GenderDetectionResponse response = genderDetectionService.detectGenderFromSelfie(riderId, selfieFile);
@@ -87,7 +87,7 @@ public class RiderController {
             description = "Rider can skip gender detection if they don't want to use women-only rides feature"
     )
     @PreAuthorize("hasRole('RIDER')")
-    public ResponseEntity<Void> skipGenderDetection(@PathVariable UUID riderId) {
+    public ResponseEntity<Void> skipGenderDetection(@PathVariable("riderId") UUID riderId) {
         log.info("Skip gender detection request for rider: {}", riderId);
         genderDetectionService.skipGenderDetection(riderId);
         return ResponseEntity.ok().build();

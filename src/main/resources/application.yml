@@ -90,11 +90,11 @@ python:
     path: d:/Backend/userservice/python_scripts
   flask:
     url: http://127.0.0.1:5000
-    timeout: 30
+    timeout: 200
   memory:
     limit: 1GB
   timeout:
-    seconds: 30
+    seconds: 200
 
 # Logging Configuration
 logging:

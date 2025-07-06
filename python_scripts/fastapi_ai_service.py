@@ -697,11 +697,10 @@ if __name__ == "__main__":
     logger.info("🚀 Starting FastAPI AI Service...")
     init_ai_models()
     
-    # Run with uvicorn
     uvicorn.run(
         "fastapi_ai_service:app",
         host="127.0.0.1",
-        port=5000,
+        port=8001, 
         reload=True,
         log_level="info"
     )

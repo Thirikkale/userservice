@@ -40,7 +40,7 @@ def detect_gender(image_path):
         response = requests.post(
             f"{FASTAPI_AI_URL}/ai/gender-detection",
             json={"image_path": image_path},
-            timeout=30
+            timeout=200
         )
         
         if response.status_code == 200:
