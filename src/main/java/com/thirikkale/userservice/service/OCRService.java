@@ -31,16 +31,19 @@ public class OCRService {
             // Save the file to a temporary location for Python processing
             Path tempFile = fileStorageService.saveToTempFile(licenseFile, "license_ocr");
 
-            // Call Python OCR script
-            JsonNode result = pythonIntegrationService.executePythonScript("textextract.py", tempFile.toString());
+            try {
+                // Call Python OCR script
+                JsonNode result = pythonIntegrationService.executePythonScript("textextract.py", tempFile.toString());
 
-            // Parse the OCR result
-            DrivingLicenseInfo licenseInfo = parsePythonOcrResult(result);
+                // Parse the OCR result
+                DrivingLicenseInfo licenseInfo = parsePythonOcrResult(result);
 
-            // Clean up temporary file
-            fileStorageService.deleteTempFile(tempFile);
+                return licenseInfo;
 
-            return licenseInfo;
+            } finally {
+                // Clean up temporary file
+                fileStorageService.deleteTempFile(tempFile);
+            }
 
         } catch (Exception e) {
             log.error("Failed to process driving license image: {}", e.getMessage());
@@ -85,6 +88,9 @@ public class OCRService {
             String extractedText = result.has("extracted_text") ? result.get("extracted_text").asText() : "";
             double confidence = result.has("confidence") ? result.get("confidence").asDouble() : 0.0;
 
+            // Log the raw extracted text for debugging
+            log.info("Raw OCR extracted text: {}", extractedText);
+
             // Extract structured information from the OCR text
             String[] nameParts = extractName(extractedText);
             String firstName = nameParts[0];
@@ -100,69 +106,85 @@ public class OCRService {
                     .licenseNumber(licenseNumber)
                     .expiryDate(expiryDate)
                     .dateOfBirth(dateOfBirth)
-                    .extractedText(extractedText)
+                    .extractedText(extractedText) // Include raw text
                     .confidence(confidence)
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to parse Python OCR result: {}", e.getMessage());
-            throw new RuntimeException("Failed to parse OCR result", e);
+            log.error("Failed to parse OCR result: {}", e.getMessage());
+            throw new RuntimeException("OCR result parsing failed: " + e.getMessage(), e);
         }
     }
 
     private boolean validateExtractedInfo(DrivingLicenseInfo info) {
-        // Basic validation - at least name and license number should be present
+        // Check if at least first name and license number are extracted
         return info.getFirstName() != null && !info.getFirstName().trim().isEmpty() &&
                 info.getLicenseNumber() != null && !info.getLicenseNumber().trim().isEmpty();
     }
 
     private String[] extractName(String text) {
-        // Look for "Name:" pattern
-        Pattern namePattern = Pattern.compile("Name:\\s*([A-Z\\s]+)", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = namePattern.matcher(text);
+        // Enhanced name extraction for Sri Lankan licenses
+        String[] result = {"Driver", "User"}; // Default values
+
+        String textUpper = text.toUpperCase();
+
+        // Look for the specific pattern: 1,2. NAME or just after numbers
+        Pattern namePattern = Pattern.compile("(?:1,2\\.?\\s*|\\d+\\s+)([A-Z\\s]+(?:[A-Z\\s]+){1,})\\s+(?:SL|BLOOD|ADDRESS|\\d)");
+        Matcher matcher = namePattern.matcher(textUpper);
 
         if (matcher.find()) {
             String fullName = matcher.group(1).trim();
-            String[] parts = fullName.split("\\s+");
+            // Clean up the name
+            fullName = fullName.replaceAll("\\s+", " ");
 
+            // Split into first and last name
+            String[] parts = fullName.split("\\s+");
             if (parts.length >= 2) {
-                return new String[] { parts[0], parts[parts.length - 1] };
+                result[0] = parts[0]; // First name
+                // Combine remaining parts as last name
+                StringBuilder lastName = new StringBuilder();
+                for (int i = 1; i < parts.length; i++) {
+                    if (lastName.length() > 0) lastName.append(" ");
+                    lastName.append(parts[i]);
+                }
+                result[1] = lastName.toString();
             } else if (parts.length == 1) {
-                return new String[] { parts[0], "" };
+                result[0] = parts[0];
+                result[1] = "";
             }
         }
 
-        // Default fallback
-        return new String[] { "Driver", "User" };
+        log.info("Extracted name: {} {}", result[0], result[1]);
+        return result;
     }
 
     private String extractLicenseNumber(String text) {
-        // Look for license number patterns
-        Pattern licensePattern = Pattern.compile("License No[.:]*\\s*([A-Z0-9]+)", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = licensePattern.matcher(text);
+        // Sri Lankan license format: Letter + 7-8 digits
+        Pattern pattern = Pattern.compile("\\b([A-Z]\\d{7,8})\\b");
+        Matcher matcher = pattern.matcher(text.toUpperCase());
 
         if (matcher.find()) {
-            return matcher.group(1).trim();
+            String licenseNumber = matcher.group(1);
+            log.info("Extracted license number: {}", licenseNumber);
+            return licenseNumber;
         }
 
         return null;
     }
 
     private String extractExpiryDate(String text) {
-        // Look for expiry date patterns (DD/MM/YYYY or DD-MM-YYYY)
-        Pattern expiryPattern = Pattern.compile("Valid Till[.:]*\\s*(\\d{2}[/-]\\d{2}[/-]\\d{4})",
-                Pattern.CASE_INSENSITIVE);
-        Matcher matcher = expiryPattern.matcher(text);
+        // Look for expiry date patterns
+        Pattern[] patterns = {
+                Pattern.compile("(?:4a\\.?)(\\d{1,2}\\.\\d{1,2}\\.\\d{4})"),
+                Pattern.compile("(?:EXP|EXPIRY|EXPIRES)[:\\s]*(\\d{1,2}\\.\\d{1,2}\\.\\d{4})"),
+        };
 
-        if (matcher.find()) {
-            String date = matcher.group(1);
-            // Convert to standard format (YYYY-MM-DD)
-            if (date.contains("/")) {
-                String[] parts = date.split("/");
-                return parts[2] + "-" + parts[1] + "-" + parts[0];
-            } else if (date.contains("-")) {
-                String[] parts = date.split("-");
-                return parts[2] + "-" + parts[1] + "-" + parts[0];
+        for (Pattern pattern : patterns) {
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                String expiryDate = matcher.group(1);
+                log.info("Extracted expiry date: {}", expiryDate);
+                return expiryDate;
             }
         }
 
@@ -170,19 +192,16 @@ public class OCRService {
     }
 
     private String extractDateOfBirth(String text) {
-        // Look for DOB patterns
-        Pattern dobPattern = Pattern.compile("DOB[.:]*\\s*(\\d{2}[/-]\\d{2}[/-]\\d{4})", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = dobPattern.matcher(text);
+        // Look for birth date patterns
+        Pattern pattern = Pattern.compile("\\b(\\d{1,2}\\.\\d{1,2}\\.\\d{4})\\b");
+        Matcher matcher = pattern.matcher(text);
 
-        if (matcher.find()) {
+        while (matcher.find()) {
             String date = matcher.group(1);
-            // Convert to standard format (YYYY-MM-DD)
-            if (date.contains("/")) {
-                String[] parts = date.split("/");
-                return parts[2] + "-" + parts[1] + "-" + parts[0];
-            } else if (date.contains("-")) {
-                String[] parts = date.split("-");
-                return parts[2] + "-" + parts[1] + "-" + parts[0];
+            // Check if it's likely a birth date (contains years 1990-2005 for adult drivers)
+            if (date.contains("199") || date.contains("200")) {
+                log.info("Extracted birth date: {}", date);
+                return date;
             }
         }
 
@@ -199,7 +218,7 @@ public class OCRService {
         private String licenseNumber;
         private String expiryDate;
         private String dateOfBirth;
-        private String extractedText;
+        private String extractedText; // Raw OCR text
         private Double confidence;
     }
 }

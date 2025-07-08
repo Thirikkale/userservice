@@ -46,6 +46,8 @@ public class FileStorageService {
             String relativePath = "/uploads/driver-documents/" + driverId + "/" + documentTypeDir + "/" + uniqueFilename;
 
             log.info("File stored successfully: {}", relativePath);
+            log.info("Absolute path: {}", targetPath.toAbsolutePath());
+
             return relativePath;
 
         } catch (IOException e) {
@@ -55,7 +57,7 @@ public class FileStorageService {
     }
 
     /**
-     * Generic file storage method (backward compatibility)
+     * Generic file storage method (for backward compatibility and general use)
      */
     public String storeFile(MultipartFile file, String directory, String subdirectory) {
         try {
@@ -80,19 +82,49 @@ public class FileStorageService {
     }
 
     /**
+     * Check if file exists at the given path
+     */
+    public boolean fileExists(String filePath) {
+        try {
+            Path path = Paths.get(filePath);
+            boolean exists = Files.exists(path);
+            log.debug("File existence check for {}: {}", filePath, exists);
+            return exists;
+        } catch (Exception e) {
+            log.warn("Error checking file existence for {}: {}", filePath, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get absolute path from relative URL
+     */
+    public String getAbsolutePath(String relativeUrl) {
+        // Remove leading slash if present
+        String cleanPath = relativeUrl.startsWith("/") ? relativeUrl.substring(1) : relativeUrl;
+        return System.getProperty("user.dir") + "/" + cleanPath;
+    }
+
+    /**
      * Download file content as byte array
      */
     public byte[] downloadFile(String fileUrl) {
         try {
-            // Remove leading slash if present
-            String cleanPath = fileUrl.startsWith("/") ? fileUrl.substring(1) : fileUrl;
-            Path filePath = Paths.get(cleanPath);
+            // Convert to absolute path if it's a relative URL
+            String filePath;
+            if (fileUrl.startsWith("/")) {
+                filePath = getAbsolutePath(fileUrl);
+            } else {
+                filePath = fileUrl;
+            }
 
-            if (!Files.exists(filePath)) {
+            Path path = Paths.get(filePath);
+
+            if (!Files.exists(path)) {
                 throw new CustomExceptions.FileStorageException("File not found: " + fileUrl);
             }
 
-            return Files.readAllBytes(filePath);
+            return Files.readAllBytes(path);
 
         } catch (IOException e) {
             log.error("Failed to download file {}: {}", fileUrl, e.getMessage());

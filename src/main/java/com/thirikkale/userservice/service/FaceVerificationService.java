@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.UUID;
 
 @Service
@@ -23,86 +24,57 @@ public class FaceVerificationService {
     private final PythonIntegrationService pythonIntegrationService;
     private final FileStorageService fileStorageService;
 
-    public FaceMatchResult verifyFaceMatch(String selfieUrl, String licensePhotoUrl) {
-        log.info("Performing face verification between selfie and license photo using FastAPI");
-        log.debug("Selfie URL: {}, License URL: {}", selfieUrl, licensePhotoUrl);
+    public FaceMatchResult verifyFaceMatch(String selfieAbsolutePath, String licenseAbsolutePath) {
+        log.info("Performing face verification using absolute paths");
+        log.debug("Selfie: {}, License: {}", selfieAbsolutePath, licenseAbsolutePath);
 
         try {
-            // Download images to temporary files for Python processing
-            Path tempSelfie = downloadImageToTempFile(selfieUrl, "selfie");
-            Path tempLicense = downloadImageToTempFile(licensePhotoUrl, "license");
-
-            log.info("Downloaded images to temp files: {} and {}", tempSelfie, tempLicense);
-
-            try {
-                // Call Python script for face verification
-                JsonNode result = pythonIntegrationService.executePythonScript(
-                        "face_verification.py",
-                        tempSelfie.toString(),
-                        tempLicense.toString()
-                );
-
-                // Parse Python result
-                FaceVerificationResponse response = parsePythonFaceResult(result);
-
-                log.info("Face verification completed. Confidence: {}, Match: {}",
-                        response.getConfidenceScore(), response.isMatch());
-
-                return FaceMatchResult.builder()
-                        .match(response.isMatch()) // Fixed: using match instead of isMatch
-                        .confidenceScore(response.getConfidenceScore())
-                        .selfieUrl(selfieUrl)
-                        .licensePhotoUrl(licensePhotoUrl)
-                        .verificationMethod("FASTAPI_AI")
-                        .distance(response.getDistance())
-                        .threshold(response.getThreshold())
-                        .model(response.getModel())
-                        .errorMessage(response.getErrorMessage())
-                        .build();
-
-            } finally {
-                // Clean up temporary files
-                cleanupTempFile(tempSelfie);
-                cleanupTempFile(tempLicense);
+            // Verify files exist
+            if (!Files.exists(Paths.get(selfieAbsolutePath))) {
+                throw new IOException("Selfie file not found: " + selfieAbsolutePath);
             }
+
+            if (!Files.exists(Paths.get(licenseAbsolutePath))) {
+                throw new IOException("License file not found: " + licenseAbsolutePath);
+            }
+
+            log.info("Both files exist, calling Python service for face verification");
+
+            // Call Python script for face verification using absolute paths
+            JsonNode result = pythonIntegrationService.executePythonScript(
+                    "face_verification.py",
+                    selfieAbsolutePath,
+                    licenseAbsolutePath
+            );
+
+            // Parse Python result
+            FaceVerificationResponse response = parsePythonFaceResult(result);
+
+            log.info("Face verification completed. Confidence: {}, Match: {}",
+                    response.getConfidenceScore(), response.isMatch());
+
+            return FaceMatchResult.builder()
+                    .match(response.isMatch())
+                    .confidenceScore(response.getConfidenceScore())
+                    .selfieUrl(selfieAbsolutePath)
+                    .licensePhotoUrl(licenseAbsolutePath)
+                    .verificationMethod("FASTAPI_AI")
+                    .distance(response.getDistance())
+                    .threshold(response.getThreshold())
+                    .model(response.getModel())
+                    .errorMessage(response.getErrorMessage())
+                    .build();
 
         } catch (Exception e) {
             log.error("Face verification failed: {}", e.getMessage(), e);
             return FaceMatchResult.builder()
-                    .match(false) // Fixed: using match instead of isMatch
+                    .match(false)
                     .confidenceScore(0.0)
-                    .selfieUrl(selfieUrl)
-                    .licensePhotoUrl(licensePhotoUrl)
+                    .selfieUrl(selfieAbsolutePath)
+                    .licensePhotoUrl(licenseAbsolutePath)
                     .verificationMethod("FASTAPI_AI")
                     .errorMessage("Face verification failed: " + e.getMessage())
                     .build();
-        }
-    }
-
-    private Path downloadImageToTempFile(String imageUrl, String prefix) throws IOException {
-        log.debug("Downloading image from URL: {}", imageUrl);
-
-        // Create temp file
-        Path tempFile = Files.createTempFile(prefix + "_" + UUID.randomUUID(), ".jpg");
-
-        // Download file content
-        byte[] imageBytes = fileStorageService.downloadFile(imageUrl);
-
-        // Write to temp file
-        Files.write(tempFile, imageBytes);
-
-        log.debug("Image downloaded to temp file: {}", tempFile);
-        return tempFile;
-    }
-
-    private void cleanupTempFile(Path tempFile) {
-        try {
-            if (tempFile != null && Files.exists(tempFile)) {
-                Files.delete(tempFile);
-                log.debug("Cleaned up temp file: {}", tempFile);
-            }
-        } catch (IOException e) {
-            log.warn("Failed to cleanup temp file {}: {}", tempFile, e.getMessage());
         }
     }
 
@@ -111,8 +83,8 @@ public class FaceVerificationService {
             log.debug("Parsing Python face verification result: {}", result);
 
             boolean success = result.get("success").asBoolean(false);
-            boolean isMatch = result.get("verified").asBoolean(false); // Note: FastAPI returns 'verified'
-            double confidenceScore = result.get("similarity_score").asDouble(0.0); // Note: FastAPI returns 'similarity_score'
+            boolean isMatch = result.get("verified").asBoolean(false);
+            double confidenceScore = result.get("similarity_score").asDouble(0.0);
 
             String errorMessage = null;
             if (!success && result.has("error")) {
@@ -153,7 +125,7 @@ public class FaceVerificationService {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class FaceMatchResult {
-        private Boolean match; // Changed from isMatch to match to fix access issues
+        private Boolean match;
         private Double confidenceScore;
         private String selfieUrl;
         private String licensePhotoUrl;

@@ -44,8 +44,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers("/api/v1/auth/register").permitAll()
 
-                        // Rider & driver registration
-                        .requestMatchers("/api/v1/riders/register", "/api/v1/drivers/register").permitAll()
+                        // Rider & driver registration AND login - FIXED
+                        .requestMatchers("/api/v1/riders/register", "/api/v1/riders/login").permitAll()
+                        .requestMatchers("/api/v1/drivers/register", "/api/v1/drivers/login").permitAll()
 
                         // Admin auth endpoints
                         .requestMatchers("/api/v1/auth/admin/login", "/api/v1/auth/admin/register-super-admin").permitAll()
@@ -67,7 +68,6 @@ public class SecurityConfig {
 
         return http.build();
     }
-
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {

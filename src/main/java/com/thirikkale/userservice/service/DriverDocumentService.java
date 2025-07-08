@@ -26,7 +26,7 @@ public class DriverDocumentService {
     private final DriverService driverService;
 
     /**
-     * Upload driver document and trigger appropriate processing
+     * Upload driver document and trigger appropriate processing - ENHANCED
      */
     public DocumentUploadResponse uploadDriverDocument(UUID driverId, DocumentType documentType, MultipartFile file) {
         log.info("Processing document upload for driver {} - type: {}", driverId, documentType);
@@ -41,21 +41,27 @@ public class DriverDocumentService {
 
             // 3. Store file and get URL
             String fileUrl = fileStorageService.storeDriverDocument(driverId, documentType, file);
+            log.info("File stored at: {}", fileUrl);
 
             // 4. Update driver with document URL
             updateDriverDocumentUrl(driver, documentType, fileUrl);
 
-            // 5. Process the document based on type
-            processDocument(driver, documentType, file, fileUrl);
+            // 5. Initialize face verification attempts if null
+            if (driver.getFaceVerificationAttempts() == null) {
+                driver.setFaceVerificationAttempts(0);
+            }
 
-            // 6. Update overall document upload status
+            // 6. Process the document based on type
+            String extractedText = processDocument(driver, documentType, file, fileUrl);
+
+            // 7. Update overall document upload status
             updateDocumentUploadStatus(driver);
 
-            // 7. Save driver changes
+            // 8. Save driver changes
             driver = driverRepository.save(driver);
 
-            // 8. Build comprehensive response
-            return buildDocumentUploadResponse(driver, documentType, fileUrl);
+            // 9. Build comprehensive response with extracted text
+            return buildDocumentUploadResponse(driver, documentType, fileUrl, extractedText);
 
         } catch (Exception e) {
             log.error("Document upload failed for driver {} - type {}: {}", driverId, documentType, e.getMessage());
@@ -64,48 +70,52 @@ public class DriverDocumentService {
     }
 
     /**
-     * Process document based on type - ENHANCED with better face verification integration
+     * Process document based on type - ENHANCED to return extracted text
      */
-    private void processDocument(Driver driver, DocumentType documentType, MultipartFile file, String fileUrl) {
+    private String processDocument(Driver driver, DocumentType documentType, MultipartFile file, String fileUrl) {
         switch (documentType) {
             case SELFIE:
                 processSelfie(driver);
-                break;
+                return null;
 
             case DRIVING_LICENSE:
-                processDrivingLicense(driver, file, fileUrl);
-                break;
+                return processDrivingLicense(driver, file, fileUrl);
 
             case REVENUE_LICENSE:
             case VEHICLE_REGISTRATION:
             case VEHICLE_INSURANCE:
                 processOtherDocument(driver, documentType);
-                break;
+                return null;
+
+            default:
+                return null;
         }
     }
 
     /**
-     * Process selfie upload - check if driving license is ready for face verification
+     * Process selfie upload - ENHANCED with better verification trigger
      */
     private void processSelfie(Driver driver) {
         log.info("Processing selfie for driver: {}", driver.getDriverId());
 
-        // If driving license is already uploaded, start face verification
+        // Set initial status
+        driver.setFaceVerificationStatus("PENDING");
+
+        // If driving license is already uploaded AND OCR completed, start face verification
         if (driver.getDrivingLicenseUrl() != null &&
                 "COMPLETED".equals(driver.getProfileExtractionStatus())) {
 
-            log.info("Both selfie and driving license available - starting face verification");
+            log.info("Both selfie and driving license available with OCR completed - starting face verification");
             startFaceVerification(driver);
         } else {
-            log.info("Selfie uploaded, waiting for driving license to complete face verification");
-            driver.setFaceVerificationStatus("PENDING");
+            log.info("Selfie uploaded, waiting for driving license OCR completion to start face verification");
         }
     }
 
     /**
-     * Process driving license - extract info and start face verification if selfie available
+     * Process driving license - ENHANCED with better OCR integration and text return
      */
-    private void processDrivingLicense(Driver driver, MultipartFile file, String fileUrl) {
+    private String processDrivingLicense(Driver driver, MultipartFile file, String fileUrl) {
         try {
             log.info("Starting OCR processing for driving license: {}", driver.getDriverId());
 
@@ -115,31 +125,45 @@ public class DriverDocumentService {
             // Extract information from driving license using OCR
             var ocrResult = ocrService.extractDrivingLicenseInfo(file);
 
-            // Update driver profile with extracted information
-            driverService.updateDriverProfileFromOCR(
-                    driver.getDriverId(),
-                    ocrResult.getFirstName(),
-                    ocrResult.getLastName(),
-                    ocrResult.getLicenseNumber(),
-                    ocrResult.getExpiryDate()
-            );
+            if (ocrResult != null && ocrResult.getFirstName() != null) {
+                // Update driver profile with extracted information
+                log.info("OCR extraction successful, updating driver profile...");
 
-            // Mark OCR as completed
-            driver.setProfileExtractionStatus("COMPLETED");
+                driverService.updateDriverProfileFromOCR(
+                        driver.getDriverId(),
+                        ocrResult.getFirstName(),
+                        ocrResult.getLastName(),
+                        ocrResult.getLicenseNumber(),
+                        ocrResult.getExpiryDate()
+                );
 
-            // If selfie is already uploaded, start face verification
-            if (driver.getSelfieUrl() != null) {
-                log.info("Both driving license and selfie available - starting face verification");
-                startFaceVerification(driver);
+                // Mark OCR as completed
+                driver.setProfileExtractionStatus("COMPLETED");
+                log.info("OCR extraction completed successfully for driver: {}", driver.getDriverId());
+
+                // If selfie is already uploaded, start face verification
+                if (driver.getSelfieUrl() != null) {
+                    log.info("Both driving license and selfie available with OCR completed - starting face verification");
+                    startFaceVerification(driver);
+                } else {
+                    log.info("Driving license processed, waiting for selfie to complete face verification");
+                    driver.setFaceVerificationStatus("PENDING");
+                }
+
+                // Return extracted text for response
+                return ocrResult.getExtractedText();
             } else {
-                log.info("Driving license processed, waiting for selfie to complete face verification");
+                log.warn("OCR extraction failed - no valid data extracted for driver: {}", driver.getDriverId());
+                driver.setProfileExtractionStatus("FAILED");
                 driver.setFaceVerificationStatus("PENDING");
+                return "OCR extraction failed - no valid data found";
             }
 
         } catch (Exception e) {
             log.error("OCR processing failed for driver {}: {}", driver.getDriverId(), e.getMessage());
             driver.setProfileExtractionStatus("FAILED");
             driver.setFaceVerificationStatus("PENDING"); // Can retry after fixing OCR
+            return "OCR processing failed: " + e.getMessage();
         }
     }
 
@@ -151,8 +175,10 @@ public class DriverDocumentService {
         log.info("{} uploaded for driver: {}", documentType, driver.getDriverId());
     }
 
+    // Add this method to your existing DriverDocumentService:
+
     /**
-     * Start face verification between selfie and driving license - ENHANCED
+     * Start face verification - ENHANCED with better error handling and service checking
      */
     private void startFaceVerification(Driver driver) {
         try {
@@ -165,48 +191,110 @@ public class DriverDocumentService {
                 return;
             }
 
+            // Check if FastAPI service is available
+//            if (!PythonIntegrationService.isServiceAvailable()) {
+//                log.error("FastAPI AI service is not available for driver: {}", driver.getDriverId());
+//                driver.setFaceVerificationStatus("FAILED");
+//                driver.setFaceMatchScore(0.0);
+//                return;
+//            }
+
+            // Update status and increment attempts
             driver.setFaceVerificationStatus("IN_PROGRESS");
             driver.setFaceVerificationAttempts(driver.getFaceVerificationAttempts() + 1);
 
+            // Convert relative URLs to absolute file paths
+            String selfieAbsolutePath = convertUrlToAbsolutePath(driver.getSelfieUrl());
+            String licenseAbsolutePath = convertUrlToAbsolutePath(driver.getDrivingLicenseUrl());
+
+            log.info("Face verification files - Selfie: {}, License: {}", selfieAbsolutePath, licenseAbsolutePath);
+
+            // Verify both files exist
+            if (!fileStorageService.fileExists(selfieAbsolutePath)) {
+                log.error("Selfie file not found: {}", selfieAbsolutePath);
+                driver.setFaceVerificationStatus("FAILED");
+                driver.setFaceMatchScore(0.0);
+                return;
+            }
+
+            if (!fileStorageService.fileExists(licenseAbsolutePath)) {
+                log.error("License file not found: {}", licenseAbsolutePath);
+                driver.setFaceVerificationStatus("FAILED");
+                driver.setFaceMatchScore(0.0);
+                return;
+            }
+
             // Perform face matching between selfie and driving license photo
             var faceMatchResult = faceVerificationService.verifyFaceMatch(
-                    driver.getSelfieUrl(),
-                    driver.getDrivingLicenseUrl()
+                    selfieAbsolutePath,
+                    licenseAbsolutePath
             );
 
+            // Detailed logging of face verification result
+            log.info("Face verification completed for driver {}: match={}, confidence={}, error={}",
+                    driver.getDriverId(),
+                    faceMatchResult.isMatch(),
+                    faceMatchResult.getConfidenceScore(),
+                    faceMatchResult.getErrorMessage());
+
             // Store the match score
-            driver.setFaceMatchScore(faceMatchResult.getConfidenceScore());
+            double confidenceScore = faceMatchResult.getConfidenceScore() != null ?
+                    faceMatchResult.getConfidenceScore() : 0.0;
+            driver.setFaceMatchScore(confidenceScore);
 
-            // Determine verification status based on confidence score
-            double confidenceScore = faceMatchResult.getConfidenceScore();
+            // Check for errors first
+            if (faceMatchResult.getErrorMessage() != null && !faceMatchResult.getErrorMessage().isEmpty()) {
+                log.error("Face verification error for driver {}: {}", driver.getDriverId(), faceMatchResult.getErrorMessage());
+                driver.setFaceVerificationStatus("FAILED");
+                return;
+            }
 
-            log.info("Face verification result for driver {}: match={}, confidence={}",
-                    driver.getDriverId(), faceMatchResult.isMatch(), confidenceScore);
+            // FIXED: Use the same threshold logic as FastAPI service (0.5)
+            double threshold = 0.5; // Match FastAPI service threshold
 
-            if (faceMatchResult.isMatch() && confidenceScore >= 0.8) {
-                // High confidence match
-                driver.setFaceVerificationStatus("VERIFIED");
-                log.info("Face verification PASSED for driver: {} with confidence: {}",
-                        driver.getDriverId(), confidenceScore);
+            log.info("Face verification result for driver {}: match={}, confidence={}, threshold={}",
+                    driver.getDriverId(), faceMatchResult.isMatch(), confidenceScore, threshold);
 
-            } else if (confidenceScore >= 0.6) {
-                // Borderline case - send for manual review
-                driver.setFaceVerificationStatus("MANUAL_REVIEW");
-                log.info("Face verification requires MANUAL_REVIEW for driver: {} with confidence: {}",
-                        driver.getDriverId(), confidenceScore);
-
+            if (confidenceScore >= threshold) {
+                if (confidenceScore >= 0.8) {
+                    // High confidence match
+                    driver.setFaceVerificationStatus("VERIFIED");
+                    log.info("Face verification PASSED (High Confidence) for driver: {} with confidence: {}",
+                            driver.getDriverId(), confidenceScore);
+                } else if (confidenceScore >= 0.65) {
+                    // Good confidence match
+                    driver.setFaceVerificationStatus("VERIFIED");
+                    log.info("Face verification PASSED (Good Confidence) for driver: {} with confidence: {}",
+                            driver.getDriverId(), confidenceScore);
+                } else {
+                    // Borderline case - send for manual review
+                    driver.setFaceVerificationStatus("MANUAL_REVIEW");
+                    log.info("Face verification requires MANUAL_REVIEW for driver: {} with confidence: {}",
+                            driver.getDriverId(), confidenceScore);
+                }
             } else {
                 // Low confidence - failed
                 driver.setFaceVerificationStatus("FAILED");
-                log.info("Face verification FAILED for driver: {} with confidence: {}",
-                        driver.getDriverId(), confidenceScore);
+                log.info("Face verification FAILED for driver: {} with confidence: {} (below threshold: {})",
+                        driver.getDriverId(), confidenceScore, threshold);
             }
 
         } catch (Exception e) {
-            log.error("Face verification failed for driver {}: {}", driver.getDriverId(), e.getMessage());
+            log.error("Face verification failed for driver {}: {}", driver.getDriverId(), e.getMessage(), e);
             driver.setFaceVerificationStatus("FAILED");
             driver.setFaceMatchScore(0.0);
         }
+    }
+
+    /**
+     * Convert relative URL to absolute file path
+     */
+    private String convertUrlToAbsolutePath(String relativeUrl) {
+        // Remove leading slash if present
+        String cleanPath = relativeUrl.startsWith("/") ? relativeUrl.substring(1) : relativeUrl;
+
+        // Convert to absolute path using forward slashes (Windows handles both)
+        return System.getProperty("user.dir") + "/" + cleanPath.replace("\\", "/");
     }
 
     /**
@@ -250,9 +338,10 @@ public class DriverDocumentService {
     }
 
     /**
-     * Build comprehensive response including face verification status - ENHANCED
+     * Build comprehensive response - ENHANCED with extracted text
      */
-    private DocumentUploadResponse buildDocumentUploadResponse(Driver driver, DocumentType documentType, String fileUrl) {
+    private DocumentUploadResponse buildDocumentUploadResponse(Driver driver, DocumentType documentType,
+                                                               String fileUrl, String extractedText) {
         String message = determineResponseMessage(driver, documentType);
         String nextStep = getNextStep(driver);
         int progress = driver.getVerificationProgress();
@@ -275,6 +364,10 @@ public class DriverDocumentService {
             responseBuilder.faceVerificationStatus(driver.getFaceVerificationStatus());
         }
 
+        if (driver.getFaceVerificationAttempts() != null) {
+            responseBuilder.faceVerificationAttempts(driver.getFaceVerificationAttempts());
+        }
+
         // Add OCR extraction details if available
         if (documentType == DocumentType.DRIVING_LICENSE) {
             responseBuilder.profileExtractionStatus(driver.getProfileExtractionStatus());
@@ -287,27 +380,44 @@ public class DriverDocumentService {
             if (driver.getLicenseNumber() != null) {
                 responseBuilder.extractedLicenseNumber(driver.getLicenseNumber());
             }
+
+            // Add extracted text if available
+            if (extractedText != null) {
+                responseBuilder.extractedText(extractedText);
+            }
+        }
+
+        // Add document verification status
+        if (driver.getDocumentVerificationStatus() != null) {
+            responseBuilder.documentVerificationStatus(driver.getDocumentVerificationStatus());
         }
 
         return responseBuilder.build();
     }
 
     /**
-     * Determine appropriate response message
+     * Determine appropriate response message - ENHANCED with better face verification feedback
      */
     private String determineResponseMessage(Driver driver, DocumentType documentType) {
-        if (documentType == DocumentType.DRIVING_LICENSE && "FAILED".equals(driver.getProfileExtractionStatus())) {
-            return "Document uploaded but OCR extraction failed. Please ensure image is clear.";
+        if (documentType == DocumentType.DRIVING_LICENSE) {
+            if ("FAILED".equals(driver.getProfileExtractionStatus())) {
+                return "Document uploaded but OCR extraction failed. Please ensure image is clear.";
+            } else if ("COMPLETED".equals(driver.getProfileExtractionStatus())) {
+                return "Document uploaded and profile information extracted successfully!";
+            }
         }
 
         if (driver.getFaceVerificationStatus() != null) {
             switch (driver.getFaceVerificationStatus()) {
                 case "VERIFIED":
-                    return "Document uploaded and face verification passed!";
+                    double score = driver.getFaceMatchScore() != null ? driver.getFaceMatchScore() : 0.0;
+                    return String.format("Document uploaded and face verification passed! (Confidence: %.1f%%)", score * 100);
                 case "FAILED":
-                    return "Document uploaded but face verification failed. Please ensure clear photos.";
+                    double failScore = driver.getFaceMatchScore() != null ? driver.getFaceMatchScore() : 0.0;
+                    return String.format("Document uploaded but face verification failed (Confidence: %.1f%% - below 50%% threshold). Please ensure clear photos.", failScore * 100);
                 case "MANUAL_REVIEW":
-                    return "Document uploaded. Face verification under manual review.";
+                    double reviewScore = driver.getFaceMatchScore() != null ? driver.getFaceMatchScore() : 0.0;
+                    return String.format("Document uploaded. Face verification under manual review (Confidence: %.1f%%).", reviewScore * 100);
                 case "IN_PROGRESS":
                     return "Document uploaded. Face verification in progress...";
             }
@@ -358,4 +468,6 @@ public class DriverDocumentService {
             throw new CustomExceptions.InvalidFileException("Only image files are allowed");
         }
     }
+
+
 }

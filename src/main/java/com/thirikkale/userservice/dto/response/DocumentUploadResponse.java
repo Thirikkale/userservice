@@ -33,6 +33,9 @@ public class DocumentUploadResponse {
     private String extractedLicenseNumber;
     private String profileExtractionStatus; // PENDING, IN_PROGRESS, COMPLETED, FAILED
 
+    // NEW: Raw extracted text from OCR
+    private String extractedText;
+
     // Document verification fields
     private String documentVerificationStatus; // PENDING, IN_PROGRESS, VERIFIED, REJECTED
 
