@@ -14,11 +14,13 @@ spring:
     password: 1111
     driver-class-name: org.postgresql.Driver
     hikari:
-      connection-timeout: 20000
-      maximum-pool-size: 10
+      connection-timeout: 20000        # 20 seconds
+      maximum-pool-size: 15            # Increased pool size
       minimum-idle: 5
-      idle-timeout: 300000
-      leak-detection-threshold: 60000
+      idle-timeout: 300000             # 5 minutes
+      max-lifetime: 1800000            # 30 minutes
+      leak-detection-threshold: 45000   # Reduced to 45 seconds
+      validation-timeout: 5000         # 5 seconds
   #  cloud:
   #    compatibility-verifier:
   #      enabled: false

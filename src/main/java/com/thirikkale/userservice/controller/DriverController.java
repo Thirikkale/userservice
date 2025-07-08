@@ -212,4 +212,15 @@ public class DriverController {
         DriverResponse response = driverService.updateDriverAvailability(driverId, isAvailable);
         return ResponseEntity.ok(response);
     }
+
+    // Add this method to your existing DriverController:
+
+    @GetMapping("/{driverId}/processing-status")
+    @Operation(summary = "Get driver document processing status")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DriverResponse> getProcessingStatus(@PathVariable UUID driverId) {
+        log.info("Get processing status for driver: {}", driverId);
+        DriverResponse response = driverService.getDriverById(driverId);
+        return ResponseEntity.ok(response);
+    }
 }
