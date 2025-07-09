@@ -38,12 +38,11 @@ public class User {
     @Size(min = 8)
     private String password;
 
-    @NotNull
-    @Size(min = 2, max = 100)
+    @Size(min = 2, max = 100, message = "First name must be between 2 and 100 characters")
     @Column(name = "first_name")
     private String firstName;
 
-    @Size(min = 2, max = 100)
+    @Size(min = 2, max = 100, message = "Last name must be between 2 and 100 characters")
     @Column(name = "last_name")
     private String lastName;
 

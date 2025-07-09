@@ -15,7 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -32,6 +35,14 @@ public class DriverService {
     private final PhoneNumberValidator phoneNumberValidator;
     private final OtpService otpService;
 
+    // Add date formatters for parsing
+    private static final DateTimeFormatter[] DATE_FORMATTERS = {
+            DateTimeFormatter.ofPattern("dd.MM.yyyy"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+            DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    };
+
     @Transactional
     public AuthResponse registerDriver(DriverRegistrationRequest request) {
         log.info("Registering driver with Firebase token - simplified flow");
@@ -41,7 +52,7 @@ public class DriverService {
             FirebaseUserInfo firebaseUserInfo = firebaseAuthService.extractUserInfo(request.getFirebaseIdToken());
 
             if (!firebaseUserInfo.isPhoneVerified()) {
-                throw new CustomExceptions.InvalidTokenException("Phone number not verified in Firebase");
+                throw new CustomExceptions.PhoneNotVerifiedException("Phone number not verified in Firebase");
             }
 
             // Format phone number
@@ -50,13 +61,13 @@ public class DriverService {
             // Check Firebase rate limiting
             if (otpService.isFirebaseRateLimited(formattedPhone)) {
                 long remainingMinutes = otpService.getFirebaseRateLimitExpiryMinutes(formattedPhone);
-                throw new CustomExceptions.InvalidTokenException(
-                        "Too many registration attempts. Please try again in " + remainingMinutes + " minutes.");
+                throw new CustomExceptions.PhoneNotVerifiedException(
+                        String.format("Too many attempts. Please try again in %d minutes.", remainingMinutes));
             }
 
             // Check if user already exists
             if (userRepository.existsByPhoneNumber(formattedPhone)) {
-                throw new CustomExceptions.UserAlreadyExistsException("User with this phone number already exists");
+                throw new CustomExceptions.UserAlreadyExistsException("User already registered with this phone number");
             }
 
             // Create User with minimal info
@@ -74,29 +85,31 @@ public class DriverService {
 
             // Create Driver with all required fields
             Driver driver = Driver.builder()
-                    .driverId(user.getUserId()) // Set the ID before saving
+                    .driverId(user.getUserId())
                     .user(user)
-                    .whatsappNumber(request.getWhatsappNumber() != null ? request.getWhatsappNumber() : formattedPhone)
+                    .whatsappNumber(request.getWhatsappNumber())
                     .isAvailable(false)
                     .isVerified(false)
                     .isDocumentsUploaded(false)
                     .faceVerificationStatus("PENDING")
                     .documentVerificationStatus("PENDING")
                     .profileExtractionStatus("PENDING")
+                    .faceVerificationAttempts(0)
                     .build();
 
-            // Save only the driver (cascade will save user)
+            // Save both entities
+            user = userRepository.save(user);
+            driver.setDriverId(user.getUserId());
             driver = driverRepository.save(driver);
 
-            // Cache Firebase verification and reset attempts
-            otpService.cacheFirebaseVerification(formattedPhone, firebaseUserInfo.getUid());
+            // Clear rate limiting on successful registration
             otpService.resetFirebaseAttempts(formattedPhone);
 
-            // Generate tokens
+            log.info("Driver registered successfully: {}", driver.getDriverId());
+
+            // Generate auth response
             String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getPhoneNumber(), "DRIVER");
             String refreshToken = jwtService.generateRefreshToken(user.getUserId(), user.getPhoneNumber());
-
-            log.info("Driver registered successfully: {}", user.getUserId());
 
             return AuthResponse.builder()
                     .userId(user.getUserId())
@@ -109,17 +122,13 @@ public class DriverService {
                     .lastName(user.getLastName())
                     .phoneNumber(user.getPhoneNumber())
                     .email(user.getEmail())
-                    .isVerified(false)
+                    .isVerified(user.getIsPhoneVerified())
                     .loginTime(LocalDateTime.now())
                     .build();
 
         } catch (Exception e) {
-            log.error("Error during driver registration: {}", e.getMessage());
-            if (e instanceof CustomExceptions.UserAlreadyExistsException ||
-                    e instanceof CustomExceptions.InvalidTokenException) {
-                throw e;
-            }
-            throw new RuntimeException("Driver registration failed. Please try again.");
+            log.error("Driver registration failed: {}", e.getMessage());
+            throw e;
         }
     }
 
@@ -186,9 +195,9 @@ public class DriverService {
         driver.setDocumentVerificationStatus(isVerified ? "VERIFIED" : "REJECTED");
 
         if (isVerified) {
-            driver.setIsAvailable(true);
+            log.info("Driver verification approved: {}", driverId);
         } else {
-            driver.setIsAvailable(false);
+            log.info("Driver verification rejected: {} - Reason: {}", driverId, notes);
         }
 
         driverRepository.save(driver);
@@ -205,15 +214,11 @@ public class DriverService {
                 .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
 
         if (!driver.getIsVerified()) {
-            throw new CustomExceptions.UserNotActiveException(
-                    "Driver must complete document verification and face verification before going online"
-            );
+            throw new CustomExceptions.UserNotActiveException("Driver must be verified before going online");
         }
 
         if (!driver.getIsDocumentsUploaded()) {
-            throw new CustomExceptions.UserNotActiveException(
-                    "Driver must upload all required documents before going online"
-            );
+            throw new CustomExceptions.UserNotActiveException("Driver must upload all documents before going online");
         }
 
         driver.setIsAvailable(isAvailable);
@@ -236,18 +241,37 @@ public class DriverService {
 
         // Update user profile with extracted data
         if (extractedFirstName != null && !extractedFirstName.trim().isEmpty()) {
-            user.setFirstName(extractedFirstName);
+            user.setFirstName(extractedFirstName.trim());
+            log.info("Updated first name from OCR: {}", extractedFirstName);
         }
         if (extractedLastName != null && !extractedLastName.trim().isEmpty()) {
-            user.setLastName(extractedLastName);
+            user.setLastName(extractedLastName.trim());
+            log.info("Updated last name from OCR: {}", extractedLastName);
         }
 
         // Update driver license info
         if (licenseNumber != null && !licenseNumber.trim().isEmpty()) {
-            driver.setLicenseNumber(licenseNumber);
+            driver.setLicenseNumber(licenseNumber.trim());
+            log.info("Updated license number from OCR: {}", licenseNumber);
         }
-        if (licenseExpiry != null) {
-            driver.setLicenseExpiry(java.time.LocalDate.parse(licenseExpiry));
+
+        // FIXED: Parse license expiry date and add 6 years
+        if (licenseExpiry != null && !licenseExpiry.trim().isEmpty()) {
+            LocalDate expiryDate = parseDate(licenseExpiry.trim());
+            if (expiryDate != null) {
+                // FIXED: Add 6 years to the extracted expiry date
+                LocalDate adjustedExpiryDate = expiryDate.plusYears(6);
+                driver.setLicenseExpiry(adjustedExpiryDate);
+                log.info("Updated license expiry from OCR: {} -> {} (added 6 years)", expiryDate, adjustedExpiryDate);
+            } else {
+                log.warn("Could not parse license expiry date: {}", licenseExpiry);
+                // FIXED: Set to null if parsing fails
+                driver.setLicenseExpiry(null);
+            }
+        } else {
+            // FIXED: Set to null if no expiry date provided
+            driver.setLicenseExpiry(null);
+            log.info("No expiry date provided, set to null");
         }
 
         driver.setProfileExtractionStatus("COMPLETED");
@@ -257,6 +281,31 @@ public class DriverService {
 
         log.info("Driver profile updated from OCR: {}", driverId);
         return mapToDriverResponse(driver);
+    }
+
+    /**
+     * FIXED: Parse date with multiple formats - handles null cases
+     */
+    private LocalDate parseDate(String dateString) {
+        if (dateString == null || dateString.trim().isEmpty()) {
+            return null;
+        }
+
+        String cleanDate = dateString.trim();
+
+        for (DateTimeFormatter formatter : DATE_FORMATTERS) {
+            try {
+                LocalDate parsedDate = LocalDate.parse(cleanDate, formatter);
+                log.debug("Successfully parsed date '{}' with format: {}", cleanDate, formatter);
+                return parsedDate;
+            } catch (DateTimeParseException e) {
+                // Try next formatter
+                continue;
+            }
+        }
+
+        log.warn("Unable to parse date with any format: {}", dateString);
+        return null;
     }
 
     private DriverResponse mapToDriverResponse(Driver driver) {

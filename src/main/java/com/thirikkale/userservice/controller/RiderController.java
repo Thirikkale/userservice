@@ -21,7 +21,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -130,6 +132,27 @@ public class RiderController {
         return ResponseEntity.ok().build();
     }
 
+    @GetMapping("/{riderId}/women-only-status")
+    @Operation(
+            summary = "Check women-only rides access status",
+            description = "Check if rider has access to women-only rides feature"
+    )
+    @PreAuthorize("hasRole('RIDER')")
+    public ResponseEntity<Map<String, Object>> getWomenOnlyStatus(@PathVariable UUID riderId) {
+        log.info("Check women-only status for rider: {}", riderId);
+
+        RiderResponse rider = riderService.getRiderById(riderId);
+
+        Map<String, Object> status = new HashMap<>();
+        status.put("riderId", riderId);
+        status.put("genderVerified", rider.getGenderVerified());
+        status.put("gender", rider.getGender());
+        status.put("womenOnlyAccess", rider.getWomenOnlyAccess());
+        status.put("hasProfilePhoto", rider.getProfilePhotoUrl() != null);
+
+        return ResponseEntity.ok(status);
+    }
+
     @GetMapping("/{riderId}")
     @Operation(summary = "Get rider by ID")
     @PreAuthorize("hasAnyRole('RIDER', 'ADMIN', 'RIDER_SUPPORT_AGENT')")
@@ -147,4 +170,7 @@ public class RiderController {
         List<RiderResponse> response = riderService.getAllRiders();
         return ResponseEntity.ok(response);
     }
+
+
+
 }

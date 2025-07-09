@@ -267,7 +267,7 @@ public class RiderService {
                 .phoneNumber(user.getPhoneNumber())
                 .email(user.getEmail())
                 .dateOfBirth(user.getDateOfBirth())
-                .profilePhotoUrl(user.getProfilePhotoUrl())
+                .profilePhotoUrl(user.getProfilePhotoUrl()) // This will now show the selfie URL if gender detection was done
                 .emergencyContactName(user.getEmergencyContactName())
                 .emergencyContactPhone(user.getEmergencyContactPhone())
                 .gender(rider.getGender())

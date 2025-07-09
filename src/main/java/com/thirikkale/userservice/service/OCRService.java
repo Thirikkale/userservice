@@ -51,6 +51,27 @@ public class OCRService {
         }
     }
 
+    /**
+     * NEW METHOD: Extract from file path (for async processing)
+     */
+    public DrivingLicenseInfo extractDrivingLicenseInfoFromPath(Path filePath) {
+        try {
+            log.info("Extracting information from driving license using file path: {}", filePath);
+
+            // Call Python OCR script directly with the file path
+            JsonNode result = pythonIntegrationService.executePythonScript("textextract.py", filePath.toString());
+
+            // Parse the OCR result
+            DrivingLicenseInfo licenseInfo = parsePythonOcrResult(result);
+
+            return licenseInfo;
+
+        } catch (Exception e) {
+            log.error("Failed to process driving license image from path {}: {}", filePath, e.getMessage());
+            throw new RuntimeException("OCR processing failed: " + e.getMessage(), e);
+        }
+    }
+
     public OcrExtractionResponse extractLicenseInformation(UUID driverId, MultipartFile licenseFile) {
         try {
             DrivingLicenseInfo licenseInfo = extractDrivingLicenseInfo(licenseFile);

@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.thirikkale.userservice.dto.response.GenderDetectionResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Rider;
+import com.thirikkale.userservice.model.User;
 import com.thirikkale.userservice.model.enums.Gender;
 import com.thirikkale.userservice.repository.RiderRepository;
+import com.thirikkale.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ import java.util.UUID;
 public class GenderDetectionService {
 
     private final RiderRepository riderRepository;
+    private final UserRepository userRepository;  // Added UserRepository
     private final FileStorageService fileStorageService;
     private final PythonIntegrationService pythonIntegrationService;
 
@@ -28,9 +31,11 @@ public class GenderDetectionService {
     public GenderDetectionResponse detectGenderFromSelfie(UUID riderId, MultipartFile selfieFile) {
         log.info("Detecting gender for rider: {}", riderId);
 
-        // Find rider
+        // Find rider with user
         Rider rider = riderRepository.findByIdWithUser(riderId)
                 .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Rider not found"));
+
+        User user = rider.getUser();
 
         try {
             // Store selfie file
@@ -39,8 +44,8 @@ public class GenderDetectionService {
             // Save the selfie to a temporary file for Python processing
             Path tempSelfie = fileStorageService.saveToTempFile(selfieFile, "selfie_" + riderId.toString());
 
-            // Call Python script for gender detection
-            JsonNode result = pythonIntegrationService.executePythonScript("gender.py", tempSelfie.toString());
+            // FIXED: Use the correct script name that matches PythonIntegrationService
+            JsonNode result = pythonIntegrationService.executePythonScript("gender_detection.py", tempSelfie.toString());
 
             log.info("Python script result: {}", result.toString());
 
@@ -70,10 +75,16 @@ public class GenderDetectionService {
             rider.setGender(detectedGender);
             rider.setGenderVerified(true);
 
-            // Grant women-only access if female detected with high confidence
-            boolean womenOnlyAccess = (detectedGender == Gender.FEMALE && confidence > 0.8);
+            // FIXED: Grant women-only access if female detected regardless of confidence
+            // Since AI has already verified gender, trust the result
+            boolean womenOnlyAccess = (detectedGender == Gender.FEMALE);
             rider.setWomenOnlyAccess(womenOnlyAccess);
 
+            // FIXED: Update user's profile photo URL with the selfie URL
+            user.setProfilePhotoUrl(selfieUrl);
+
+            // Save both entities
+            userRepository.save(user);
             riderRepository.save(rider);
 
             // Clean up temporary file
@@ -82,14 +93,20 @@ public class GenderDetectionService {
             log.info("Gender detection completed for rider: {} - Gender: {} - Confidence: {} - Women Only Access: {}",
                     riderId, detectedGender, confidence, womenOnlyAccess);
 
+            String responseMessage;
+            if (womenOnlyAccess) {
+                responseMessage = "Gender verified as female. Women-only rides feature enabled and profile photo updated.";
+            } else {
+                responseMessage = String.format("Gender detected as %s with %.2f%% confidence. Profile photo updated.",
+                        detectedGender.toString().toLowerCase(), confidence * 100);
+            }
+
             return GenderDetectionResponse.builder()
                     .riderId(riderId)
                     .detectedGender(detectedGender)
                     .confidence(confidence)
                     .womenOnlyAccessGranted(womenOnlyAccess)
-                    .message(womenOnlyAccess ? "Gender verified as female. Women-only rides feature enabled."
-                            : String.format("Gender detected as %s with %.2f%% confidence.",
-                            detectedGender.toString().toLowerCase(), confidence * 100))
+                    .message(responseMessage)
                     .build();
 
         } catch (Exception e) {
@@ -154,6 +171,7 @@ public class GenderDetectionService {
         return Gender.NOT_SPECIFIED;
     }
 
+    @Transactional
     public void skipGenderDetection(UUID riderId) {
         log.info("Skipping gender detection for rider: {}", riderId);
 

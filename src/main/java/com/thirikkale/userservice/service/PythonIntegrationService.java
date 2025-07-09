@@ -80,8 +80,7 @@ public class PythonIntegrationService {
                     url,
                     HttpMethod.POST,
                     requestEntity,
-                    String.class
-            );
+                    String.class);
 
             if (response.getStatusCode() == HttpStatus.OK) {
                 JsonNode jsonResponse = objectMapper.readTree(response.getBody());
@@ -126,8 +125,7 @@ public class PythonIntegrationService {
                     url,
                     HttpMethod.POST,
                     requestEntity,
-                    String.class
-            );
+                    String.class);
 
             if (response.getStatusCode() == HttpStatus.OK) {
                 JsonNode jsonResponse = objectMapper.readTree(response.getBody());
@@ -173,8 +171,7 @@ public class PythonIntegrationService {
                     url,
                     HttpMethod.POST,
                     requestEntity,
-                    String.class
-            );
+                    String.class);
 
             if (response.getStatusCode() == HttpStatus.OK) {
                 JsonNode jsonResponse = objectMapper.readTree(response.getBody());
@@ -202,20 +199,20 @@ public class PythonIntegrationService {
 
             boolean success = !fastApiResponse.has("error");
             boolean verified = fastApiResponse.has("verified") ? fastApiResponse.get("verified").asBoolean() : false;
-            double similarityScore = fastApiResponse.has("similarity_score") ?
-                    fastApiResponse.get("similarity_score").asDouble() : 0.0;
-            double confidence = fastApiResponse.has("confidence") ?
-                    fastApiResponse.get("confidence").asDouble() : similarityScore;
-            double threshold = fastApiResponse.has("threshold") ?
-                    fastApiResponse.get("threshold").asDouble() : 0.6;
+            double similarityScore = fastApiResponse.has("similarity_score")
+                    ? fastApiResponse.get("similarity_score").asDouble()
+                    : 0.0;
+            double confidence = fastApiResponse.has("confidence") ? fastApiResponse.get("confidence").asDouble()
+                    : similarityScore;
+            double threshold = fastApiResponse.has("threshold") ? fastApiResponse.get("threshold").asDouble() : 0.6;
 
             convertedResponse.put("success", success);
             convertedResponse.put("verified", verified);
             convertedResponse.put("similarity_score", similarityScore);
             convertedResponse.put("confidence", confidence);
             convertedResponse.put("threshold", threshold);
-            convertedResponse.put("model", fastApiResponse.has("model") ?
-                    fastApiResponse.get("model").asText() : "FastAPI");
+            convertedResponse.put("model",
+                    fastApiResponse.has("model") ? fastApiResponse.get("model").asText() : "FastAPI");
 
             if (fastApiResponse.has("error")) {
                 convertedResponse.put("error", fastApiResponse.get("error").asText());
@@ -239,10 +236,9 @@ public class PythonIntegrationService {
             Map<String, Object> convertedResponse = new HashMap<>();
 
             boolean success = !fastApiResponse.has("error");
-            String extractedText = fastApiResponse.has("raw_text") ?
-                    fastApiResponse.get("raw_text").asText() : "";
-            String cleanedText = fastApiResponse.has("cleaned_text") ?
-                    fastApiResponse.get("cleaned_text").asText() : extractedText;
+            String extractedText = fastApiResponse.has("raw_text") ? fastApiResponse.get("raw_text").asText() : "";
+            String cleanedText = fastApiResponse.has("cleaned_text") ? fastApiResponse.get("cleaned_text").asText()
+                    : extractedText;
 
             convertedResponse.put("success", success);
             convertedResponse.put("extracted_text", extractedText);

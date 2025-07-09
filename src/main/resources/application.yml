@@ -1,10 +1,18 @@
 server:
+  address: 0.0.0.0
   port: 8081
   servlet:
     context-path: /user-service
   error:
     include-message: always
     include-binding-errors: always
+
+cors:
+    allowed-origins: "*"
+    allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+    allowed-headers: "*"
+    allow-credentials: true
+
 spring:
   application:
     name: user-service
@@ -14,28 +22,25 @@ spring:
     password: 1111
     driver-class-name: org.postgresql.Driver
     hikari:
-      connection-timeout: 20000        # 20 seconds
-      maximum-pool-size: 15            # Increased pool size
-      minimum-idle: 5
+      connection-timeout: 5000         # Reduced to 5 seconds
+      maximum-pool-size: 10            # Reduced pool size
+      minimum-idle: 3
       idle-timeout: 300000             # 5 minutes
       max-lifetime: 1800000            # 30 minutes
-      leak-detection-threshold: 45000   # Reduced to 45 seconds
-      validation-timeout: 5000         # 5 seconds
-  #  cloud:
-  #    compatibility-verifier:
-  #      enabled: false
+      leak-detection-threshold: 10000   # Reduced to 10 seconds
+      validation-timeout: 2000         # Reduced to 2 seconds
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false  # Disable SQL logging in production
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
         jdbc:
           time_zone: UTC
-    open-in-view: false
+    open-in-view: false  # Very important - prevents connection leaks
 
   data:
     redis:
@@ -59,7 +64,6 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
-  # Security Configuration
   security:
     require-ssl: false
 
@@ -68,63 +72,58 @@ jwt:
   expiration: 3600000
   refresh-expiration: 604800000
 
-# Firebase Configuration (Replace Twilio)
 firebase:
   project-id: thirikkale-app
   config:
     path: firebase-service-account.json
 
-# File Upload Configuration
 file:
   upload:
     dir: uploads/
     max-size: 10485760 # 10MB
 
-# OTP Configuration
 otp:
   expiration-minutes: 5
   max-attempts: 3
 
-# Python Integration Configuration (Flask AI Service)
+# Python Integration Configuration - REDUCED TIMEOUTS
 python:
   interpreter: python
   scripts:
     path: d:/Backend/userservice/python_scripts
   fastapi:
     url: http://127.0.0.1:8001
-    timeout: 200
+    timeout: 200  # Reduced to 30 seconds
   memory:
     limit: 1GB
   timeout:
-    seconds: 200
+    seconds: 200  # Reduced to 30 seconds
 
-# Logging Configuration
+# Logging Configuration - REDUCED verbosity
 logging:
   level:
-    com.thirikkale: DEBUG
-    org.springframework.security: DEBUG
-    org.springframework.web.cors: DEBUG
-    org.springframework.security.web.access: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-    org.springframework.cache: DEBUG
+    com.thirikkale: INFO  # Changed from DEBUG
+    org.springframework.security: WARN  # Changed from DEBUG
+    org.springframework.web.cors: WARN
+    org.springframework.security.web.access: WARN
+    org.hibernate.SQL: WARN  # Changed from DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.cache: WARN
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: logs/user-service.log
 
-# Management Configuration (Actuator)
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics
   endpoint:
     health:
       show-details: when-authorized
 
-# API Documentation
 springdoc:
   api-docs:
     path: /api-docs
@@ -136,4 +135,4 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
-#docker run -d -p 6379:6379 --name redis redis
+

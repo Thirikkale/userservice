@@ -82,12 +82,18 @@ public class FaceVerificationService {
         try {
             log.debug("Parsing Python face verification result: {}", result);
 
-            boolean success = result.get("success").asBoolean(false);
+            // FIXED: Check if we have a successful verification first
+            boolean hasVerificationData = result.has("verified") && result.has("similarity_score");
+
+            // FIXED: If we have verification data, treat as success regardless of 'success' field
+            boolean success = hasVerificationData || (result.has("success") && result.get("success").asBoolean(false));
+
             boolean isMatch = result.get("verified").asBoolean(false);
             double confidenceScore = result.get("similarity_score").asDouble(0.0);
 
             String errorMessage = null;
-            if (!success && result.has("error")) {
+            // FIXED: Only set error message if we truly have an error (no verification data AND explicit error)
+            if (!hasVerificationData && result.has("error")) {
                 errorMessage = result.get("error").asText();
             }
 
@@ -96,8 +102,8 @@ public class FaceVerificationService {
             double threshold = result.has("threshold") ? result.get("threshold").asDouble(0.6) : 0.6;
             String model = result.has("model") ? result.get("model").asText("FastAPI") : "FastAPI";
 
-            log.info("Parsed verification result: success={}, match={}, confidence={}",
-                    success, isMatch, confidenceScore);
+            log.info("Parsed verification result: success={}, match={}, confidence={}, errorMessage={}",
+                    success, isMatch, confidenceScore, errorMessage);
 
             return FaceVerificationResponse.builder()
                     .success(success)

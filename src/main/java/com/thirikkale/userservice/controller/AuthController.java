@@ -54,14 +54,6 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-//    @PostMapping("/login/firebase")
-//    @Operation(summary = "Login existing user with Firebase token")
-//    public ResponseEntity<AuthResponse> loginWithFirebase(@RequestParam String firebaseIdToken) {
-//        log.info("Firebase login request received");
-//        AuthResponse response = authService.loginWithFirebase(firebaseIdToken);
-//        return ResponseEntity.ok(response);
-//    }
-
     // Backward compatibility
     @PostMapping("/login")
     @Operation(summary = "Legacy login endpoint")
@@ -70,8 +62,6 @@ public class AuthController {
         AuthResponse response = authService.loginWithPassword(request);
         return ResponseEntity.ok(response);
     }
-
-
 
     // TOKEN REFRESH
     @PostMapping("/refresh")

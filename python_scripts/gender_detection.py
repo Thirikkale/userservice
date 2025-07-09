@@ -80,7 +80,7 @@ def main():
             'success': False,
             'predicted_gender': 'Unknown',
             'confidence_score': 0.0,
-            'error': 'Invalid arguments. Usage: python gender.py <image_path>',
+            'error': 'Invalid arguments. Usage: python gender_detection.py <image_path>',
             'message': 'Gender detection failed: Invalid arguments'
         }
         print(json.dumps(error_result))
