@@ -28,17 +28,54 @@ public class AuthResponse {
     private Boolean isVerified;
     private LocalDateTime loginTime;
 
-    // Add the missing static factory method
-    public static AuthResponse of(String token, long expiresIn, UUID userId, String email, String firstName, String lastName) {
+    // NEW: Add registration status fields
+    private Boolean isNewRegistration; // true = new user, false = existing user auto-login
+    private String registrationMessage; // Custom message for frontend
+    private String nextStep; // What user should do next
+
+    // Factory method for new registration
+    public static AuthResponse newRegistration(UUID userId, String accessToken, String refreshToken,
+                                               String userType, String firstName, String lastName,
+                                               String phoneNumber, String email, String nextStep) {
         return AuthResponse.builder()
                 .userId(userId)
-                .accessToken(token)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .expiresIn(expiresIn)
-                .email(email)
+                .expiresIn(3600L)
+                .userType(userType)
                 .firstName(firstName)
                 .lastName(lastName)
+                .phoneNumber(phoneNumber)
+                .email(email)
+                .isVerified(true)
                 .loginTime(LocalDateTime.now())
+                .isNewRegistration(true)
+                .registrationMessage("Registration successful! Welcome to Thirikkale.")
+                .nextStep(nextStep)
+                .build();
+    }
+
+    // Factory method for auto-login
+    public static AuthResponse autoLogin(UUID userId, String accessToken, String refreshToken,
+                                         String userType, String firstName, String lastName,
+                                         String phoneNumber, String email, String welcomeMessage) {
+        return AuthResponse.builder()
+                .userId(userId)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(3600L)
+                .userType(userType)
+                .firstName(firstName)
+                .lastName(lastName)
+                .phoneNumber(phoneNumber)
+                .email(email)
+                .isVerified(true)
+                .loginTime(LocalDateTime.now())
+                .isNewRegistration(false)
+                .registrationMessage(welcomeMessage)
+                .nextStep("You're all set! Start using the app.")
                 .build();
     }
 }

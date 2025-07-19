@@ -146,10 +146,10 @@ public class MultiRoleAuthService {
                 return createNewUserWithRiderRole(firebaseUserInfo, firstName, lastName, formattedPhone);
 
             case RIDER_ONLY:
-                // Already a rider - block registration, redirect to login
-                log.warn("User already has rider role, blocking registration: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException(
-                        "You already have a Rider account. Please login instead.");
+                // Already a rider - AUTO-LOGIN instead of blocking
+                log.info("User already has rider role, auto-login for phone: {}", formattedPhone);
+                return performAutoLogin(roleStatus.getUser(), "RIDER",
+                        "Welcome back! You're already registered as a rider.");
 
             case DRIVER_ONLY:
                 // Driver wants to become rider too - upgrade existing user
@@ -157,13 +157,56 @@ public class MultiRoleAuthService {
                 return upgradeDriverToRider(roleStatus.getUser(), formattedPhone);
 
             case BOTH_ROLES:
-                // Already has both roles - block registration
-                log.warn("User already has both roles, blocking registration: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException(
-                        "You already have accounts for both Rider and Driver. Please login instead.");
+                // Already has both roles - AUTO-LOGIN as rider instead of blocking
+                log.info("User already has both roles, auto-login as rider for phone: {}", formattedPhone);
+                return performAutoLogin(roleStatus.getUser(), "RIDER",
+                        "Welcome back! Logging you into the Rider app.");
 
             default:
                 throw new IllegalStateException("Invalid user role state");
+        }
+    }
+
+    /**
+     * NEW METHOD: Perform auto-login for existing users
+     */
+    private AuthResponse performAutoLogin(User existingUser, String loginRole, String welcomeMessage) {
+        try {
+            // Update last login time
+            existingUser.setLastLoginAt(LocalDateTime.now());
+            userRepository.save(existingUser);
+
+            // Generate tokens for the appropriate role
+            String accessToken = jwtService.generateAccessToken(
+                    existingUser.getUserId(),
+                    existingUser.getPhoneNumber(),
+                    loginRole
+            );
+            String refreshToken = jwtService.generateRefreshToken(
+                    existingUser.getUserId(),
+                    existingUser.getPhoneNumber()
+            );
+
+            log.info("Auto-login successful for user {} as {}", existingUser.getUserId(), loginRole);
+
+            return AuthResponse.builder()
+                    .userId(existingUser.getUserId())
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .tokenType("Bearer")
+                    .expiresIn(3600L)
+                    .userType(loginRole)
+                    .firstName(existingUser.getFirstName())
+                    .lastName(existingUser.getLastName())
+                    .phoneNumber(existingUser.getPhoneNumber())
+                    .email(existingUser.getEmail())
+                    .isVerified(existingUser.getIsPhoneVerified())
+                    .loginTime(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Auto-login failed for user {}: {}", existingUser.getUserId(), e.getMessage());
+            throw new RuntimeException("Auto-login failed: " + e.getMessage(), e);
         }
     }
 
@@ -183,10 +226,10 @@ public class MultiRoleAuthService {
                         whatsappNumber, formattedPhone);
 
             case DRIVER_ONLY:
-                // Already a driver - block registration, redirect to login
-                log.warn("User already has driver role, blocking registration: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException(
-                        "You already have a Driver account. Please login instead.");
+                // Already a driver - AUTO-LOGIN instead of blocking
+                log.info("User already has driver role, auto-login for phone: {}", formattedPhone);
+                return performAutoLogin(roleStatus.getUser(), "DRIVER",
+                        "Welcome back! You're already registered as a driver.");
 
             case RIDER_ONLY:
                 // Rider wants to become driver too - upgrade existing user
@@ -194,10 +237,10 @@ public class MultiRoleAuthService {
                 return upgradeRiderToDriver(roleStatus.getUser(), whatsappNumber, formattedPhone);
 
             case BOTH_ROLES:
-                // Already has both roles - block registration
-                log.warn("User already has both roles, blocking registration: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException(
-                        "You already have accounts for both Rider and Driver. Please login instead.");
+                // Already has both roles - AUTO-LOGIN as driver instead of blocking
+                log.info("User already has both roles, auto-login as driver for phone: {}", formattedPhone);
+                return performAutoLogin(roleStatus.getUser(), "DRIVER",
+                        "Welcome back! Logging you into the Driver app.");
 
             default:
                 throw new IllegalStateException("Invalid user role state");

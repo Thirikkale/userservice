@@ -40,7 +40,7 @@ public class DriverController {
     @Operation(
             summary = "Register for Driver App (Step 1)",
             description = "Register new driver or upgrade existing rider to driver using Firebase Phone Auth token. " +
-                    "This creates a basic profile. Driver must then upload required documents for verification."
+                    "If you already have a driver account, you'll be automatically logged in."
     )
     public ResponseEntity<AuthResponse> registerDriver(@Valid @RequestBody DriverRegistrationRequest request) {
         log.info("Driver app registration request received");
@@ -54,15 +54,16 @@ public class DriverController {
                     MultiRoleAuthService.AppType.DRIVER_APP
             );
 
+            // Check if this was an auto-login (existing user)
+            if (response.getUserType().equals("DRIVER")) {
+                log.info("Driver registration/auto-login successful for user: {}", response.getUserId());
+            }
+
             return ResponseEntity.ok(response);
 
-        } catch (CustomExceptions.UserAlreadyExistsException e) {
-            log.warn("User already exists, prompting login: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(AuthResponse.builder()
-                            .userType("ERROR")
-                            .accessToken(null)
-                            .build());
+        } catch (Exception e) {
+            log.error("Driver registration failed: {}", e.getMessage());
+            throw e; // Let global exception handler deal with it
         }
     }
 

@@ -42,8 +42,7 @@ public class RiderController {
     @Operation(
             summary = "Register for Rider App",
             description = "Register new rider or upgrade existing driver to rider with minimal required information. " +
-                    "Only Firebase token, first name, and last name are required. " +
-                    "Other details can be updated later via profile update endpoint."
+                    "If you already have a rider account, you'll be automatically logged in."
     )
     public ResponseEntity<AuthResponse> registerRider(@Valid @RequestBody RiderRegistrationRequest request) {
         log.info("Rider app registration request received");
@@ -57,15 +56,16 @@ public class RiderController {
                     MultiRoleAuthService.AppType.RIDER_APP
             );
 
+            // Check if this was an auto-login (existing user)
+            if (response.getUserType().equals("RIDER")) {
+                log.info("Rider registration/auto-login successful for user: {}", response.getUserId());
+            }
+
             return ResponseEntity.ok(response);
 
-        } catch (CustomExceptions.UserAlreadyExistsException e) {
-            log.warn("User already exists, prompting login: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(AuthResponse.builder()
-                            .userType("ERROR")
-                            .accessToken(null)
-                            .build());
+        } catch (Exception e) {
+            log.error("Rider registration failed: {}", e.getMessage());
+            throw e; // Let global exception handler deal with it
         }
     }
 
