@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class FirebaseAuthService {
 
-    private final FirebaseAuth firebaseAuth;
+    private final FirebaseAuth firebaseAuth;//auth
 
     public FirebaseUserInfo extractUserInfo(String firebaseIdToken) {
         try {
