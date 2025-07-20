@@ -1,5 +1,6 @@
 package com.thirikkale.userservice.controller;
 
+import com.thirikkale.userservice.dto.request.DriverProfileSetupRequest;
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
@@ -9,13 +10,11 @@ import com.thirikkale.userservice.service.DriverDocumentService;
 import com.thirikkale.userservice.service.DriverService;
 import com.thirikkale.userservice.service.MultiRoleAuthService;
 import com.thirikkale.userservice.service.MultiRoleLoginService;
-import com.thirikkale.userservice.exception.CustomExceptions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -38,48 +37,41 @@ public class DriverController {
 
     @PostMapping("/register")
     @Operation(
-            summary = "Register for Driver App (Step 1)",
-            description = "Register new driver or upgrade existing rider to driver using Firebase Phone Auth token. " +
-                    "If you already have a driver account, you'll be automatically logged in."
+            summary = "Step 1: Register with Firebase Token",
+            description = "Initial registration with Firebase phone authentication token only. " +
+                    "Returns token and user ID for profile completion in next step."
     )
     public ResponseEntity<AuthResponse> registerDriver(@Valid @RequestBody DriverRegistrationRequest request) {
-        log.info("Driver app registration request received");
+        log.info("Driver app token-only registration request received");
 
-        try {
-            AuthResponse response = multiRoleAuthService.registerUser(
-                    request.getFirebaseIdToken(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    request.getWhatsappNumber(),
-                    MultiRoleAuthService.AppType.DRIVER_APP
-            );
+        AuthResponse response = multiRoleAuthService.registerUserWithFirebaseOnly(
+                request.getFirebaseIdToken(),
+                MultiRoleAuthService.AppType.DRIVER_APP
+        );
 
-            // FIXED: Log based on actual registration status
-            if (response.getIsNewRegistration() != null && response.getIsNewRegistration()) {
-                log.info("New driver registered successfully for user: {}", response.getUserId());
-            } else {
-                log.info("Existing driver auto-login successful for user: {}", response.getUserId());
-            }
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Driver registration failed: {}", e.getMessage());
-            throw e;
-        }
+        return ResponseEntity.ok(response);
     }
 
-    private AuthResponse tryDriverLogin(String firebaseIdToken) {
-        try {
-            return multiRoleLoginService.loginForApp(
-                    firebaseIdToken,
-                    MultiRoleAuthService.AppType.DRIVER_APP
-            );
-        } catch (CustomExceptions.UserNotFoundException | CustomExceptions.UnauthorizedAppAccessException e) {
-            // User doesn't exist or doesn't have driver role - proceed with registration
-            log.info("No existing driver found, will proceed with registration");
-            return null;
-        }
+    @PostMapping("/{driverId}/complete-profile")
+    @Operation(
+            summary = "Step 2: Complete Profile Setup",
+            description = "Complete driver profile with first name, last name, and optional WhatsApp number after token registration."
+    )
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<AuthResponse> completeDriverProfile(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody DriverProfileSetupRequest request) {
+        log.info("Completing driver profile setup for: {}", driverId);
+
+        AuthResponse response = multiRoleAuthService.completeProfileSetup(
+                driverId,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getWhatsappNumber(),
+                MultiRoleAuthService.AppType.DRIVER_APP
+        );
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
@@ -98,7 +90,7 @@ public class DriverController {
     // Document Upload Endpoints
 
     @PostMapping("/{driverId}/documents/selfie")
-    @Operation(summary = "Upload driver selfie (Step 2a)")
+    @Operation(summary = "Upload driver selfie (Step 3a)")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadSelfie(
             @PathVariable UUID driverId,
@@ -110,7 +102,7 @@ public class DriverController {
     }
 
     @PostMapping("/{driverId}/documents/driving-license")
-    @Operation(summary = "Upload driving license (Step 2b) - OCR will extract profile info")
+    @Operation(summary = "Upload driving license (Step 3b) - OCR will extract profile info")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadDrivingLicense(
             @PathVariable UUID driverId,
@@ -122,7 +114,7 @@ public class DriverController {
     }
 
     @PostMapping("/{driverId}/documents/revenue-license")
-    @Operation(summary = "Upload revenue license (Step 2c)")
+    @Operation(summary = "Upload revenue license (Step 3c)")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadRevenueLicense(
             @PathVariable UUID driverId,
@@ -134,7 +126,7 @@ public class DriverController {
     }
 
     @PostMapping("/{driverId}/documents/vehicle-registration")
-    @Operation(summary = "Upload vehicle registration (Step 2d)")
+    @Operation(summary = "Upload vehicle registration (Step 3d)")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadVehicleRegistration(
             @PathVariable UUID driverId,
@@ -146,7 +138,7 @@ public class DriverController {
     }
 
     @PostMapping("/{driverId}/documents/vehicle-insurance")
-    @Operation(summary = "Upload vehicle insurance (Step 2e)")
+    @Operation(summary = "Upload vehicle insurance (Step 3e)")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadVehicleInsurance(
             @PathVariable UUID driverId,
@@ -167,6 +159,28 @@ public class DriverController {
         DriverResponse response = driverService.getDriverById(driverId);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/{driverId}/processing-status")
+    @Operation(summary = "Get driver document processing status")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DriverResponse> getProcessingStatus(@PathVariable UUID driverId) {
+        log.info("Get processing status for driver: {}", driverId);
+        DriverResponse response = driverService.getDriverById(driverId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{driverId}/availability")
+    @Operation(summary = "Update driver availability (Go online/offline)")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DriverResponse> updateAvailability(
+            @PathVariable UUID driverId,
+            @RequestParam boolean isAvailable) {
+        log.info("Update driver availability: {} - {}", driverId, isAvailable);
+        DriverResponse response = driverService.updateDriverAvailability(driverId, isAvailable);
+        return ResponseEntity.ok(response);
+    }
+
+    // Admin/Support Agent Operations
 
     @GetMapping
     @Operation(summary = "Get all drivers (Admin/Support)")
@@ -204,8 +218,6 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
-    // Admin/Support Agent Operations
-
     @PutMapping("/{driverId}/verification")
     @Operation(summary = "Update driver verification status (Manual verification)")
     @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER_SUPPORT_AGENT')")
@@ -215,28 +227,6 @@ public class DriverController {
             @RequestParam(required = false) String notes) {
         log.info("Manual verification update for driver: {} - {}", driverId, isVerified);
         DriverResponse response = driverService.updateDriverVerificationStatus(driverId, isVerified, notes);
-        return ResponseEntity.ok(response);
-    }
-
-    @PutMapping("/{driverId}/availability")
-    @Operation(summary = "Update driver availability (Go online/offline)")
-    @PreAuthorize("hasRole('DRIVER')")
-    public ResponseEntity<DriverResponse> updateAvailability(
-            @PathVariable UUID driverId,
-            @RequestParam boolean isAvailable) {
-        log.info("Update driver availability: {} - {}", driverId, isAvailable);
-        DriverResponse response = driverService.updateDriverAvailability(driverId, isAvailable);
-        return ResponseEntity.ok(response);
-    }
-
-    // Add this method to your existing DriverController:
-
-    @GetMapping("/{driverId}/processing-status")
-    @Operation(summary = "Get driver document processing status")
-    @PreAuthorize("hasRole('DRIVER')")
-    public ResponseEntity<DriverResponse> getProcessingStatus(@PathVariable UUID driverId) {
-        log.info("Get processing status for driver: {}", driverId);
-        DriverResponse response = driverService.getDriverById(driverId);
         return ResponseEntity.ok(response);
     }
 }

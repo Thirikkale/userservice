@@ -63,8 +63,8 @@ public class RiderService {
                 throw new CustomExceptions.UserAlreadyExistsException("Rider already registered with this phone number");
             }
 
-            // 4. Create or get user
-            User user = getOrCreateUser(formattedPhone, firebaseUserInfo, request);
+            // 4. Create or get user - NO NAMES IN REQUEST ANYMORE
+            User user = getOrCreateUser(formattedPhone, firebaseUserInfo);
 
             // 5. Final check before creating rider
             if (riderRepository.existsByUser_PhoneNumber(formattedPhone)) {
@@ -82,39 +82,44 @@ public class RiderService {
             log.error("User already exists: {}", e.getMessage());
             throw e;
         } catch (DataIntegrityViolationException e) {
-            log.error("Data integrity violation during rider registration: {}", e.getMessage());
-            throw new CustomExceptions.UserAlreadyExistsException("Rider already registered with this phone number");
+            log.error("Database integrity violation during rider registration: {}", e.getMessage());
+            throw new CustomExceptions.UserAlreadyExistsException("Rider registration failed due to duplicate data");
         } catch (ObjectOptimisticLockingFailureException e) {
-            log.error("Optimistic locking failure during rider registration: {}", e.getMessage());
+            log.error("Concurrent modification during rider registration: {}", e.getMessage());
             throw new CustomExceptions.UserAlreadyExistsException("Registration failed due to concurrent access. Please try again.");
         } catch (Exception e) {
-            log.error("Unexpected error during rider registration", e);
-            throw new RuntimeException("Registration failed. Please try again.");
+            log.error("Unexpected error during rider registration: {}", e.getMessage(), e);
+            throw new RuntimeException("Rider registration failed: " + e.getMessage(), e);
         }
     }
 
-    private User getOrCreateUser(String formattedPhone, FirebaseUserInfo firebaseUserInfo, RiderRegistrationRequest request) {
+    // FIXED: Remove request parameter since names are no longer in the request
+    private User getOrCreateUser(String formattedPhone, FirebaseUserInfo firebaseUserInfo) {
         Optional<User> existingUser = userRepository.findByPhoneNumber(formattedPhone);
 
         if (existingUser.isPresent()) {
-            User user = existingUser.get();
             log.info("Found existing user for phone: {}", formattedPhone);
+            User user = existingUser.get();
 
-            // Only update login time to avoid conflicts
+            // Update user with Firebase info if needed
+            user.setIsPhoneVerified(true);
             user.setLastLoginAt(LocalDateTime.now());
-
-            try {
-                return userRepository.save(user);
-            } catch (Exception e) {
-                log.warn("Failed to update user login time, returning existing user: {}", e.getMessage());
-                return user;
+            if (user.getEmail() == null && firebaseUserInfo.getEmail() != null) {
+                user.setEmail(firebaseUserInfo.getEmail());
             }
+            if (user.getProfilePhotoUrl() == null && firebaseUserInfo.getPicture() != null) {
+                user.setProfilePhotoUrl(firebaseUserInfo.getPicture());
+            }
+
+            return userRepository.save(user);
         } else {
-            // Create new user
+            log.info("Creating new user for phone: {}", formattedPhone);
+
+            // FIXED: Create user with placeholder names that will be updated later
             User newUser = User.builder()
                     .phoneNumber(formattedPhone)
-                    .firstName(request.getFirstName())
-                    .lastName(request.getLastName())
+                    .firstName("Rider") // Placeholder - will be updated in profile completion
+                    .lastName("User")   // Placeholder - will be updated in profile completion
                     .email(firebaseUserInfo.getEmail())
                     .isActive(true)
                     .isPhoneVerified(true)
@@ -192,6 +197,9 @@ public class RiderService {
                 .isActive(rider.getUser().getIsActive())
                 .isVerified(rider.getUser().getIsPhoneVerified())
                 .loginTime(LocalDateTime.now())
+                .isNewRegistration(true) // This is a new registration
+                .registrationMessage("Registration successful! Please complete your profile.")
+                .nextStep("COMPLETE_PROFILE") // Signal that profile completion is needed
                 .build();
     }
 

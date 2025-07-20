@@ -1,5 +1,6 @@
 package com.thirikkale.userservice.controller;
 
+import com.thirikkale.userservice.dto.request.RiderProfileSetupRequest;
 import com.thirikkale.userservice.dto.request.RiderRegistrationRequest;
 import com.thirikkale.userservice.dto.request.RiderProfileUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
@@ -9,13 +10,11 @@ import com.thirikkale.userservice.service.GenderDetectionService;
 import com.thirikkale.userservice.service.RiderService;
 import com.thirikkale.userservice.service.MultiRoleAuthService;
 import com.thirikkale.userservice.service.MultiRoleLoginService;
-import com.thirikkale.userservice.exception.CustomExceptions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -40,33 +39,41 @@ public class RiderController {
 
     @PostMapping("/register")
     @Operation(
-            summary = "Register for Rider App",
-            description = "Register new rider or upgrade existing driver to rider with minimal required information. " +
-                    "If you already have a rider account, you'll be automatically logged in."
+            summary = "Step 1: Register with Firebase Token",
+            description = "Initial registration with Firebase phone authentication token only. " +
+                    "Returns token and user ID for profile completion in next step."
     )
     public ResponseEntity<AuthResponse> registerRider(@Valid @RequestBody RiderRegistrationRequest request) {
-        log.info("Rider app registration request received");
+        log.info("Rider app token-only registration request received");
 
-        try {
-            AuthResponse response = multiRoleAuthService.registerUser(
-                    request.getFirebaseIdToken(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    null, // No WhatsApp number for riders
-                    MultiRoleAuthService.AppType.RIDER_APP
-            );
+        AuthResponse response = multiRoleAuthService.registerUserWithFirebaseOnly(
+                request.getFirebaseIdToken(),
+                MultiRoleAuthService.AppType.RIDER_APP
+        );
 
-            // Check if this was an auto-login (existing user)
-            if (response.getUserType().equals("RIDER")) {
-                log.info("Rider registration/auto-login successful for user: {}", response.getUserId());
-            }
+        return ResponseEntity.ok(response);
+    }
 
-            return ResponseEntity.ok(response);
+    @PostMapping("/{riderId}/complete-profile")
+    @Operation(
+            summary = "Step 2: Complete Profile Setup",
+            description = "Complete rider profile with first name and last name after token registration."
+    )
+    @PreAuthorize("hasRole('RIDER')")
+    public ResponseEntity<AuthResponse> completeRiderProfile(
+            @PathVariable UUID riderId,
+            @Valid @RequestBody RiderProfileSetupRequest request) {
+        log.info("Completing rider profile setup for: {}", riderId);
 
-        } catch (Exception e) {
-            log.error("Rider registration failed: {}", e.getMessage());
-            throw e; // Let global exception handler deal with it
-        }
+        AuthResponse response = multiRoleAuthService.completeProfileSetup(
+                riderId,
+                request.getFirstName(),
+                request.getLastName(),
+                null, // No whatsapp for riders
+                MultiRoleAuthService.AppType.RIDER_APP
+        );
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
@@ -90,19 +97,6 @@ public class RiderController {
             @Valid @RequestBody RiderProfileUpdateRequest request) {
         log.info("Update rider profile request for: {}", riderId);
         RiderResponse response = riderService.updateRiderProfile(riderId, request);
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/{riderId}/profile-photo")
-    @Operation(summary = "Upload profile photo")
-    @PreAuthorize("hasRole('RIDER')")
-    public ResponseEntity<RiderResponse> uploadProfilePhoto(
-            @PathVariable UUID riderId,
-            @RequestParam("photo") MultipartFile photoFile) {
-        log.info("Profile photo upload request for rider: {}", riderId);
-        // This would be implemented in FileStorageService
-        // For now, return current profile
-        RiderResponse response = riderService.getRiderById(riderId);
         return ResponseEntity.ok(response);
     }
 
@@ -170,7 +164,4 @@ public class RiderController {
         List<RiderResponse> response = riderService.getAllRiders();
         return ResponseEntity.ok(response);
     }
-
-
-
 }
