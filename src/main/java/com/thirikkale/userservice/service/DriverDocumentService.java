@@ -3,8 +3,10 @@ package com.thirikkale.userservice.service;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Driver;
+import com.thirikkale.userservice.model.User;
 import com.thirikkale.userservice.model.enums.DocumentType;
 import com.thirikkale.userservice.repository.DriverRepository;
+import com.thirikkale.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -17,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -26,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 public class DriverDocumentService {
 
     private final DriverRepository driverRepository;
+    private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
     private final OCRService ocrService;
     private final FaceVerificationService faceVerificationService;
@@ -393,20 +397,34 @@ public class DriverDocumentService {
      * Process document based on type - MODIFIED for async handling
      */
     private String processDocument(Driver driver, DocumentType documentType, MultipartFile file, String fileUrl) {
+        updateDriverDocumentUrl(driver, documentType, fileUrl);
+
+        // ENHANCED: Update profile photo URL for selfie uploads
+        if (documentType == DocumentType.SELFIE) {
+            User user = driver.getUser();
+            if (user != null) {
+                user.setProfilePhotoUrl(fileUrl);
+                userRepository.save(user);
+                log.info("Updated profile photo URL for driver: {}", driver.getDriverId());
+            }
+        }
+
         if (documentType == DocumentType.SELFIE) {
             processSelfie(driver);
-            return null;
+            return "Selfie uploaded successfully. Profile photo updated.";
         } else if (documentType == DocumentType.DRIVING_LICENSE) {
-            // This is now handled async, so just return a message
-            return "OCR processing started asynchronously";
-        } else if (documentType == DocumentType.REVENUE_LICENSE ||
-                documentType == DocumentType.VEHICLE_REGISTRATION ||
-                documentType == DocumentType.VEHICLE_INSURANCE) {
+            return "OCR processing started asynchronously.";
+        } else if (EnumSet.of(
+                DocumentType.REVENUE_LICENSE,
+                DocumentType.VEHICLE_REGISTRATION,
+                DocumentType.VEHICLE_INSURANCE
+        ).contains(documentType)) {
             processOtherDocument(driver, documentType);
-            return null;
+            return documentType.name() + " uploaded successfully.";
         } else {
-            return null;
+            return "Unsupported document type: " + documentType.name();
         }
+
     }
 
     /**
@@ -414,6 +432,14 @@ public class DriverDocumentService {
      */
     private void processSelfie(Driver driver) {
         log.info("Processing selfie for driver: {}", driver.getDriverId());
+
+        // Update the user's profile photo URL with the selfie URL
+        User user = driver.getUser();
+        if (user != null && driver.getSelfieUrl() != null) {
+            user.setProfilePhotoUrl(driver.getSelfieUrl());
+            userRepository.save(user);
+            log.info("Updated profile photo URL for driver: {}", driver.getDriverId());
+        }
 
         driver.setFaceVerificationStatus("PENDING");
 

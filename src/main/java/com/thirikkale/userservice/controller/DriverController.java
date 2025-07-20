@@ -52,7 +52,7 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{driverId}/complete-profile")
+    @PutMapping("/{driverId}/complete-profile")
     @Operation(
             summary = "Step 2: Complete Profile Setup",
             description = "Complete driver profile with first name, last name, and optional WhatsApp number after token registration."
