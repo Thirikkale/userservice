@@ -54,16 +54,31 @@ public class DriverController {
                     MultiRoleAuthService.AppType.DRIVER_APP
             );
 
-            // Check if this was an auto-login (existing user)
-            if (response.getUserType().equals("DRIVER")) {
-                log.info("Driver registration/auto-login successful for user: {}", response.getUserId());
+            // FIXED: Log based on actual registration status
+            if (response.getIsNewRegistration() != null && response.getIsNewRegistration()) {
+                log.info("New driver registered successfully for user: {}", response.getUserId());
+            } else {
+                log.info("Existing driver auto-login successful for user: {}", response.getUserId());
             }
 
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             log.error("Driver registration failed: {}", e.getMessage());
-            throw e; // Let global exception handler deal with it
+            throw e;
+        }
+    }
+
+    private AuthResponse tryDriverLogin(String firebaseIdToken) {
+        try {
+            return multiRoleLoginService.loginForApp(
+                    firebaseIdToken,
+                    MultiRoleAuthService.AppType.DRIVER_APP
+            );
+        } catch (CustomExceptions.UserNotFoundException | CustomExceptions.UnauthorizedAppAccessException e) {
+            // User doesn't exist or doesn't have driver role - proceed with registration
+            log.info("No existing driver found, will proceed with registration");
+            return null;
         }
     }
 

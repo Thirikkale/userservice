@@ -170,45 +170,45 @@ public class MultiRoleAuthService {
     /**
      * NEW METHOD: Perform auto-login for existing users
      */
-    private AuthResponse performAutoLogin(User existingUser, String loginRole, String welcomeMessage) {
-        try {
-            // Update last login time
-            existingUser.setLastLoginAt(LocalDateTime.now());
-            userRepository.save(existingUser);
-
-            // Generate tokens for the appropriate role
-            String accessToken = jwtService.generateAccessToken(
-                    existingUser.getUserId(),
-                    existingUser.getPhoneNumber(),
-                    loginRole
-            );
-            String refreshToken = jwtService.generateRefreshToken(
-                    existingUser.getUserId(),
-                    existingUser.getPhoneNumber()
-            );
-
-            log.info("Auto-login successful for user {} as {}", existingUser.getUserId(), loginRole);
-
-            return AuthResponse.builder()
-                    .userId(existingUser.getUserId())
-                    .accessToken(accessToken)
-                    .refreshToken(refreshToken)
-                    .tokenType("Bearer")
-                    .expiresIn(3600L)
-                    .userType(loginRole)
-                    .firstName(existingUser.getFirstName())
-                    .lastName(existingUser.getLastName())
-                    .phoneNumber(existingUser.getPhoneNumber())
-                    .email(existingUser.getEmail())
-                    .isVerified(existingUser.getIsPhoneVerified())
-                    .loginTime(LocalDateTime.now())
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Auto-login failed for user {}: {}", existingUser.getUserId(), e.getMessage());
-            throw new RuntimeException("Auto-login failed: " + e.getMessage(), e);
-        }
-    }
+//    private AuthResponse performAutoLogin(User existingUser, String loginRole, String welcomeMessage) {
+//        try {
+//            // Update last login time
+//            existingUser.setLastLoginAt(LocalDateTime.now());
+//            userRepository.save(existingUser);
+//
+//            // Generate tokens for the appropriate role
+//            String accessToken = jwtService.generateAccessToken(
+//                    existingUser.getUserId(),
+//                    existingUser.getPhoneNumber(),
+//                    loginRole
+//            );
+//            String refreshToken = jwtService.generateRefreshToken(
+//                    existingUser.getUserId(),
+//                    existingUser.getPhoneNumber()
+//            );
+//
+//            log.info("Auto-login successful for user {} as {}", existingUser.getUserId(), loginRole);
+//
+//            return AuthResponse.builder()
+//                    .userId(existingUser.getUserId())
+//                    .accessToken(accessToken)
+//                    .refreshToken(refreshToken)
+//                    .tokenType("Bearer")
+//                    .expiresIn(3600L)
+//                    .userType(loginRole)
+//                    .firstName(existingUser.getFirstName())
+//                    .lastName(existingUser.getLastName())
+//                    .phoneNumber(existingUser.getPhoneNumber())
+//                    .email(existingUser.getEmail())
+//                    .isVerified(existingUser.getIsPhoneVerified())
+//                    .loginTime(LocalDateTime.now())
+//                    .build();
+//
+//        } catch (Exception e) {
+//            log.error("Auto-login failed for user {}: {}", existingUser.getUserId(), e.getMessage());
+//            throw new RuntimeException("Auto-login failed: " + e.getMessage(), e);
+//        }
+//    }
 
     /**
      * Handle Driver App Registration Logic
@@ -319,9 +319,9 @@ public class MultiRoleAuthService {
             // 1. Create and persist user first to get the generated ID
             User user = User.builder()
                     .phoneNumber(formattedPhone)
-                    // Handle null names gracefully with default values
-                    .firstName(firstName != null && !firstName.trim().isEmpty() ? firstName.trim() : "Driver")
-                    .lastName(lastName != null && !lastName.trim().isEmpty() ? lastName.trim() : "User")
+                    // FIXED: Better default handling
+                    .firstName(firstName != null && !firstName.trim().isEmpty() ? firstName.trim() : "New")
+                    .lastName(lastName != null && !lastName.trim().isEmpty() ? lastName.trim() : "Driver")
                     .email(firebaseUserInfo.getEmail())
                     .isActive(true)
                     .isPhoneVerified(true)
@@ -359,13 +359,71 @@ public class MultiRoleAuthService {
             entityManager.flush(); // Ensure driver is saved
 
             log.info("Successfully created user with driver role: {}", user.getUserId());
-            return generateAuthResponse(user, "DRIVER");
+
+            // FIXED: Use proper factory method for new registration
+            return generateNewDriverRegistrationResponse(user, "DRIVER");
 
         } catch (Exception e) {
             log.error("Failed to create user with driver role for phone: {}", formattedPhone, e);
             throw new RuntimeException("Driver registration failed: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Generate auth response for new driver registration
+     */
+    private AuthResponse generateNewDriverRegistrationResponse(User user, String userType) {
+        String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getPhoneNumber(), userType);
+        String refreshToken = jwtService.generateRefreshToken(user.getUserId(), user.getPhoneNumber());
+
+        // Determine next step based on profile completeness
+        String nextStep;
+        if (user.getFirstName().equals("New") || user.getLastName().equals("Driver")) {
+            nextStep = "Please update your profile with your real name and then upload your documents.";
+        } else {
+            nextStep = "Complete your profile and upload required documents to start driving.";
+        }
+
+        return AuthResponse.newRegistration(
+                user.getUserId(),
+                accessToken,
+                refreshToken,
+                userType,
+                user.getFirstName(),
+                user.getLastName(),
+                user.getPhoneNumber(),
+                user.getEmail(),
+                nextStep
+        );
+    }
+
+    /**
+     * NEW METHOD: Perform auto-login for existing users - FIXED
+     */
+    private AuthResponse performAutoLogin(User existingUser, String loginRole, String welcomeMessage) {
+        log.info("Performing auto-login for existing user: {} as {}", existingUser.getUserId(), loginRole);
+
+        // Update login time
+        existingUser.setLastLoginAt(LocalDateTime.now());
+        existingUser = userRepository.save(existingUser);
+
+        String accessToken = jwtService.generateAccessToken(existingUser.getUserId(), existingUser.getPhoneNumber(), loginRole);
+        String refreshToken = jwtService.generateRefreshToken(existingUser.getUserId(), existingUser.getPhoneNumber());
+
+        return AuthResponse.autoLogin(
+                existingUser.getUserId(),
+                accessToken,
+                refreshToken,
+                loginRole,
+                existingUser.getFirstName(),
+                existingUser.getLastName(),
+                existingUser.getPhoneNumber(),
+                existingUser.getEmail(),
+                welcomeMessage
+        );
+    }
+
+
 
     /**
      * Upgrade existing driver to also be a rider - preserves TPT integrity
@@ -470,10 +528,10 @@ public class MultiRoleAuthService {
     }
 
     /**
-     * Generate appropriate auth response based on role
+     * Generate appropriate auth response based on role - UPDATED
      */
-    private AuthResponse generateAuthResponse(User user, String loginRole) {
-        String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getPhoneNumber(), loginRole);
+    private AuthResponse generateAuthResponse(User user, String userType) {
+        String accessToken = jwtService.generateAccessToken(user.getUserId(), user.getPhoneNumber(), userType);
         String refreshToken = jwtService.generateRefreshToken(user.getUserId(), user.getPhoneNumber());
 
         return AuthResponse.builder()
@@ -482,13 +540,17 @@ public class MultiRoleAuthService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(3600L)
-                .userType(loginRole)
+                .userType(userType)
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .phoneNumber(user.getPhoneNumber())
                 .email(user.getEmail())
+                .isActive(user.getIsActive()) // FIXED: Use actual user status
                 .isVerified(user.getIsPhoneVerified())
                 .loginTime(LocalDateTime.now())
+                .isNewRegistration(false) // FIXED: This is for existing users
+                .registrationMessage("Welcome back!")
+                .nextStep("Continue using the app.")
                 .build();
     }
 

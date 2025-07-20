@@ -34,6 +34,7 @@ public class AuthResponse {
     private String nextStep; // What user should do next
 
     // Factory method for new registration
+    // Factory method for new registration - FIXED
     public static AuthResponse newRegistration(UUID userId, String accessToken, String refreshToken,
                                                String userType, String firstName, String lastName,
                                                String phoneNumber, String email, String nextStep) {
@@ -48,15 +49,16 @@ public class AuthResponse {
                 .lastName(lastName)
                 .phoneNumber(phoneNumber)
                 .email(email)
+                .isActive(true) // FIXED: Set to true for new users
                 .isVerified(true)
                 .loginTime(LocalDateTime.now())
-                .isNewRegistration(true)
+                .isNewRegistration(true) // FIXED: Explicitly set to true
                 .registrationMessage("Registration successful! Welcome to Thirikkale.")
                 .nextStep(nextStep)
                 .build();
     }
 
-    // Factory method for auto-login
+    // Factory method for auto-login - FIXED
     public static AuthResponse autoLogin(UUID userId, String accessToken, String refreshToken,
                                          String userType, String firstName, String lastName,
                                          String phoneNumber, String email, String welcomeMessage) {
@@ -71,9 +73,10 @@ public class AuthResponse {
                 .lastName(lastName)
                 .phoneNumber(phoneNumber)
                 .email(email)
+                .isActive(true) // FIXED: Set based on user status
                 .isVerified(true)
                 .loginTime(LocalDateTime.now())
-                .isNewRegistration(false)
+                .isNewRegistration(false) // FIXED: Explicitly set to false
                 .registrationMessage(welcomeMessage)
                 .nextStep("You're all set! Start using the app.")
                 .build();
