@@ -1,17 +1,18 @@
 package com.thirikkale.userservice.controller;
 
 import com.thirikkale.userservice.dto.request.DriverProfileSetupRequest;
+import com.thirikkale.userservice.dto.request.DriverProfileUpdateRequest;
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
+import com.thirikkale.userservice.exception.CustomExceptions;
+import com.thirikkale.userservice.model.Driver;
 import com.thirikkale.userservice.model.enums.DocumentType;
 import com.thirikkale.userservice.model.enums.VehicleType;
-import com.thirikkale.userservice.service.DriverDocumentService;
-import com.thirikkale.userservice.service.DriverService;
-import com.thirikkale.userservice.service.MultiRoleAuthService;
-import com.thirikkale.userservice.service.MultiRoleLoginService;
+import com.thirikkale.userservice.repository.DriverRepository;
+import com.thirikkale.userservice.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,7 +23,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -36,6 +39,8 @@ public class DriverController {
     private final DriverDocumentService driverDocumentService;
     private final MultiRoleAuthService multiRoleAuthService;
     private final MultiRoleLoginService multiRoleLoginService;
+    private final FileStorageService fileStorageService;
+    private final DriverRepository driverRepository;
 
     @PostMapping("/register")
     @Operation(
@@ -256,6 +261,55 @@ public class DriverController {
             @RequestParam(required = false) String notes) {
         log.info("Manual verification update for driver: {} - {}", driverId, isVerified);
         DriverResponse response = driverService.updateDriverVerificationStatus(driverId, isVerified, notes);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{driverId}/documents/status")
+    @Operation(summary = "Get document upload status")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<Map<String, Object>> getDocumentStatus(@PathVariable UUID driverId) {
+        log.info("Document status request for driver: {}", driverId);
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        Map<String, Object> status = new HashMap<>();
+        status.put("driverId", driverId);
+        status.put("isDocumentsUploaded", driver.getIsDocumentsUploaded());
+
+        Map<String, Object> documents = new HashMap<>();
+        documents.put("selfie", createDocumentStatus("SELFIE", driver.getSelfieUrl()));
+        documents.put("drivingLicense", createDocumentStatus("DRIVING_LICENSE", driver.getDrivingLicenseUrl()));
+        documents.put("revenueLicense", createDocumentStatus("REVENUE_LICENSE", driver.getRevenueLicenseUrl()));
+        documents.put("vehicleRegistration", createDocumentStatus("VEHICLE_REGISTRATION", driver.getVehicleRegistrationUrl()));
+        documents.put("vehicleInsurance", createDocumentStatus("VEHICLE_INSURANCE", driver.getVehicleInsuranceUrl()));
+
+        status.put("documents", documents);
+        status.put("verificationProgress", driver.getVerificationProgress());
+
+        return ResponseEntity.ok(status);
+    }
+
+    private Map<String, Object> createDocumentStatus(String type, String url) {
+        Map<String, Object> docStatus = new HashMap<>();
+        docStatus.put("uploaded", url != null);
+        docStatus.put("url", url);
+        docStatus.put("exists", url != null ? fileStorageService.fileExists(url) : false);
+        return docStatus;
+    }
+
+    // Add the missing profile update endpoint
+    @PutMapping("/{driverId}/profile")
+    @Operation(
+            summary = "Update driver profile",
+            description = "Update driver profile information like name, date of birth, etc."
+    )
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DriverResponse> updateDriverProfile(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody DriverProfileUpdateRequest request) {
+        log.info("Profile update request for driver: {}", driverId);
+        DriverResponse response = driverService.updateDriverProfile(driverId, request);
         return ResponseEntity.ok(response);
     }
 }

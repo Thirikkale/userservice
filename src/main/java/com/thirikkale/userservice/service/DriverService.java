@@ -1,5 +1,6 @@
 package com.thirikkale.userservice.service;
 
+import com.thirikkale.userservice.dto.request.DriverProfileUpdateRequest;
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
@@ -38,6 +39,7 @@ public class DriverService {
     private final JwtService jwtService;
     private final PhoneNumberValidator phoneNumberValidator;
     private final OtpService otpService;
+    private final FileStorageService fileStorageService;
 
     // Add date formatters for parsing
     private static final DateTimeFormatter[] DATE_FORMATTERS = {
@@ -410,6 +412,12 @@ public class DriverService {
 
     private DriverResponse mapToDriverResponse(Driver driver) {
         User user = driver.getUser();
+        // Verify file existence for debugging
+        if (driver.getSelfieUrl() != null) {
+            boolean exists = fileStorageService.fileExists(driver.getSelfieUrl());
+            log.info("Selfie file exists: {} for path: {}", exists, driver.getSelfieUrl());
+        }
+
         return DriverResponse.builder()
                 .driverId(driver.getDriverId())
                 .firstName(user.getFirstName())
@@ -445,5 +453,45 @@ public class DriverService {
                 .faceMatchScore(driver.getFaceMatchScore())
                 .faceVerificationAttempts(driver.getFaceVerificationAttempts())
                 .build();
+    }
+
+    //newly added
+    @Transactional
+    public DriverResponse updateDriverProfile(UUID driverId, DriverProfileUpdateRequest request) {
+        log.info("Updating driver profile: {}", driverId);
+
+        Driver driver = driverRepository.findByIdWithUser(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        User user = driver.getUser();
+
+        // Update user information
+        if (request.getFirstName() != null && !request.getFirstName().trim().isEmpty()) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null && !request.getLastName().trim().isEmpty()) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth());
+        }
+        if (request.getEmergencyContactName() != null) {
+            user.setEmergencyContactName(request.getEmergencyContactName());
+        }
+        if (request.getEmergencyContactPhone() != null) {
+            user.setEmergencyContactPhone(request.getEmergencyContactPhone());
+        }
+
+        // Update driver-specific information
+        if (request.getWhatsappNumber() != null && !request.getWhatsappNumber().trim().isEmpty()) {
+            driver.setWhatsappNumber(request.getWhatsappNumber().trim());
+        }
+
+        // Save changes
+        userRepository.save(user);
+        driver = driverRepository.save(driver);
+
+        log.info("Driver profile updated successfully: {}", driverId);
+        return mapToDriverResponse(driver);
     }
 }

@@ -75,6 +75,7 @@ public class DriverDocumentService {
 
             // 8. Save state and RELEASE transaction immediately
             driver = driverRepository.save(driver);
+            driverRepository.flush();
 
             // 9. Build immediate response BEFORE starting async processing
             DocumentUploadResponse response;
