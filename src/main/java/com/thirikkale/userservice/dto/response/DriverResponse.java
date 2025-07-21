@@ -1,5 +1,6 @@
 package com.thirikkale.userservice.dto.response;
 
+import com.thirikkale.userservice.model.enums.VehicleType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -41,6 +42,7 @@ public class DriverResponse {
     private String licenseNumber;
     private LocalDate licenseExpiry;
     private String vehicleRegistration;
+    private VehicleType vehicleType;
     private String whatsappNumber;
 
     // Document URLs

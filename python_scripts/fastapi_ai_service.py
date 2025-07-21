@@ -422,39 +422,53 @@ async def verify_faces(request: FaceVerificationRequest):
             error=str(e)
         )
 
+# Add this improved OCR endpoint
+
 @app.post("/ai/ocr-extraction", response_model=OCRResponse)
 async def extract_text(request: ImageRequest):
     """
-    Extract text from an image using OCR.
-    
-    - **image_path**: Path to the image file
-    - Returns extracted text and parsed license information
+    Extract text from an image using OCR with enhanced error handling.
     """
     start_time = time.time()
     
     try:
         # Validate image path
         if not os.path.exists(request.image_path):
+            logger.error(f"Image not found: {request.image_path}")
             raise HTTPException(status_code=404, detail=f"Image not found: {request.image_path}")
         
+        # Check file size
+        file_size = os.path.getsize(request.image_path)
+        logger.info(f"Processing image: {request.image_path} (Size: {file_size} bytes)")
+        
         if USE_MOCK_AI:
-            # Mock OCR response
-            await asyncio.sleep(0.003)  # Simulate processing
+            logger.info("🎭 Using MOCK OCR mode")
+            await asyncio.sleep(0.003)
             
-            # Generate mock license data
-            mock_license_data = {
-                "raw_text": "DRIVER LICENSE\nJOHN DOE\nDOB: 1990-01-01\nLIC: DL123456789\nEXP: 2028-01-01\nCLASS: D",
-                "cleaned_text": "DRIVER LICENSE JOHN DOE DOB: 1990-01-01 LIC: DL123456789 EXP: 2028-01-01 CLASS: D",
-                "license_info": {
-                    "full_name": "JOHN DOE",
-                    "date_of_birth": "1990-01-01",
-                    "license_number": "DL123456789",
-                    "expiry_date": "2028-01-01",
-                    "license_class": "D",
-                    "document_type": "DRIVER LICENSE"
-                },
-                "confidence_scores": [0.95, 0.88, 0.92, 0.89, 0.94, 0.87]
-            }
+            # Enhanced mock data based on filename
+            filename = os.path.basename(request.image_path).lower()
+            if 'license' in filename or 'driving' in filename:
+                mock_license_data = {
+                    "raw_text": "DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA\nDRIVING LICENCE\n1,2. MUNASINGHE ARACHCHIGE\nNIKILA AMANTHA SILVA\n3. 02.02.2002\n4a. 04.04.2024\n8. 651/30 SUDHAVILA ROAD\nNAWAGAMUWA RANALA\nB5583418\nBLOOD GROUP O+",
+                    "cleaned_text": "DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA DRIVING LICENCE 1,2. MUNASINGHE ARACHCHIGE NIKILA AMANTHA SILVA 3. 02.02.2002 4a. 04.04.2024 8. 651/30 SUDHAVILA ROAD NAWAGAMUWA RANALA B5583418 BLOOD GROUP O+",
+                    "license_info": {
+                        "full_name": "MUNASINGHE ARACHCHIGE NIKILA AMANTHA SILVA",
+                        "birthdate": "02.02.2002",
+                        "expiring_date": "04.04.2024",
+                        "license_number": "B5583418",
+                        "address": "651/30 SUDHAVILA ROAD NAWAGAMUWA RANALA",
+                        "blood_group": "O+",
+                        "document_type": "DRIVING LICENCE"
+                    },
+                    "confidence_scores": [0.95, 0.88, 0.92, 0.89, 0.94, 0.87, 0.91, 0.85]
+                }
+            else:
+                mock_license_data = {
+                    "raw_text": "Sample text from image",
+                    "cleaned_text": "Sample text from image",
+                    "license_info": {},
+                    "confidence_scores": [0.75]
+                }
             
             processing_time = time.time() - start_time
             
@@ -469,48 +483,91 @@ async def extract_text(request: ImageRequest):
         
         else:
             # REAL AI processing with EasyOCR
-            logger.info(f"🧠 Processing real OCR extraction for: {request.image_path}")
-            import easyocr
+            logger.info(f"🧠 Processing REAL OCR extraction for: {request.image_path}")
             
-            if 'ocr_reader' not in MODEL_CACHE:
-                logger.info("📥 Initializing EasyOCR reader...")
-                MODEL_CACHE['ocr_reader'] = easyocr.Reader(['en'], gpu=False)
+            try:
+                import easyocr
+                import cv2
+                import numpy as np
+                from PIL import Image
+                
+                # Initialize reader if not cached
+                if 'ocr_reader' not in MODEL_CACHE:
+                    logger.info("📥 Initializing EasyOCR reader...")
+                    MODEL_CACHE['ocr_reader'] = easyocr.Reader(['en'], gpu=False, verbose=False)
+                    logger.info("✅ EasyOCR reader initialized")
+                
+                reader = MODEL_CACHE['ocr_reader']
+                
+                # Pre-process image for better OCR
+                logger.info("🔧 Pre-processing image...")
+                
+                # Read image
+                img = cv2.imread(request.image_path)
+                if img is None:
+                    raise Exception(f"Could not read image: {request.image_path}")
+                
+                # Convert to grayscale
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                
+                # Apply noise reduction and sharpening
+                denoised = cv2.medianBlur(gray, 3)
+                
+                # Enhance contrast
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                enhanced = clahe.apply(denoised)
+                
+                logger.info("🤖 Running EasyOCR...")
+                
+                # Extract text using enhanced image
+                results = reader.readtext(enhanced)
+                
+                # Process results
+                extracted_texts = []
+                confidence_scores = []
+                
+                logger.info(f"📄 EasyOCR found {len(results)} text regions")
+                
+                for i, (bbox, text, confidence) in enumerate(results):
+                    logger.info(f"   {i+1}. '{text}' (confidence: {confidence:.3f})")
+                    if confidence > 0.2:  # Lower threshold for more text
+                        extracted_texts.append(text.strip())
+                        confidence_scores.append(float(confidence))
+                
+                # Combine all text
+                raw_text = "\n".join(extracted_texts)
+                cleaned_text = " ".join(extracted_texts)
+                
+                logger.info(f"📝 Combined text: {cleaned_text[:200]}...")
+                
+                # Parse license information
+                license_info = parse_license_text(cleaned_text)
+                
+                processing_time = time.time() - start_time
+                
+                logger.info(f"✅ Real AI OCR completed in {processing_time:.3f}s")
+                logger.info(f"📊 Extracted {len(extracted_texts)} text items")
+                logger.info(f"🏷️  Parsed license info: {list(license_info.keys())}")
+                
+                return OCRResponse(
+                    raw_text=raw_text,
+                    cleaned_text=cleaned_text,
+                    license_info=license_info,
+                    confidence_scores=confidence_scores,
+                    processing_time=processing_time,
+                    model="easyocr_real_ai"
+                )
+                
+            except ImportError as e:
+                logger.error(f"❌ Missing OCR dependencies: {e}")
+                raise HTTPException(status_code=500, detail=f"OCR dependencies not installed: {e}")
             
-            reader = MODEL_CACHE['ocr_reader']
+            except Exception as e:
+                logger.error(f"❌ OCR processing failed: {e}")
+                raise HTTPException(status_code=500, detail=f"OCR processing failed: {e}")
             
-            # Extract text using EasyOCR
-            results = reader.readtext(request.image_path)
-            
-            # Process results
-            extracted_texts = []
-            confidence_scores = []
-            
-            for (bbox, text, confidence) in results:
-                if confidence > 0.3:  # Filter very low confidence results
-                    extracted_texts.append(text)
-                    confidence_scores.append(float(confidence))
-            
-            # Combine all text
-            raw_text = "\n".join(extracted_texts)
-            cleaned_text = " ".join(extracted_texts)
-            
-            # Parse license information
-            license_info = parse_license_text(cleaned_text)
-            
-            processing_time = time.time() - start_time
-            
-            logger.info(f"✅ Real AI OCR extracted {len(extracted_texts)} text items")
-            logger.info(f"📄 Extracted text preview: {cleaned_text[:100]}...")
-            
-            return OCRResponse(
-                raw_text=raw_text,
-                cleaned_text=cleaned_text,
-                license_info=license_info,
-                confidence_scores=confidence_scores,
-                processing_time=processing_time,
-                model="easyocr_real_ai"
-            )
-            
+    except HTTPException:
+        raise
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"OCR extraction error: {e}")

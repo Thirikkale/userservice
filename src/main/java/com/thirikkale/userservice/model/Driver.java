@@ -1,5 +1,6 @@
 package com.thirikkale.userservice.model;
 
+import com.thirikkale.userservice.model.enums.VehicleType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -63,6 +64,11 @@ public class Driver {
     // Vehicle information
     @Column(name = "vehicle_registration", unique = true)
     private String vehicleRegistration;
+
+    // NEW: Add vehicle type
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vehicle_type")
+    private VehicleType vehicleType;
 
     @Column(name = "whatsapp_number")
     private String whatsappNumber;

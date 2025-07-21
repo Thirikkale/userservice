@@ -1,8 +1,10 @@
 package com.thirikkale.userservice.service;
 
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
+import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
+import com.thirikkale.userservice.model.enums.VehicleType;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Driver;
 import com.thirikkale.userservice.model.User;
@@ -44,6 +46,80 @@ public class DriverService {
             DateTimeFormatter.ofPattern("dd-MM-yyyy"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd")
     };
+
+    //added lately
+    @Transactional
+    public DriverResponse updateDriverVehicleType(UUID driverId, VehicleTypeUpdateRequest request) {
+        log.info("Updating vehicle type for driver: {} to {}", driverId, request.getVehicleType());
+
+        Driver driver = driverRepository.findByIdWithUser(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        // Update vehicle type
+        driver.setVehicleType(request.getVehicleType());
+
+        driver = driverRepository.save(driver);
+
+        log.info("Vehicle type updated successfully for driver: {}", driverId);
+        return mapToDriverResponse(driver);
+    }
+
+    // NEW: Add the completeDriverProfileSetup method
+    @Transactional
+    public AuthResponse completeDriverProfileSetup(UUID driverId, String firstName, String lastName,
+                                                   String whatsappNumber, VehicleType vehicleType) {
+        log.info("Completing driver profile setup for: {}", driverId);
+
+        Driver driver = driverRepository.findByIdWithUser(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        User user = driver.getUser();
+
+        // Update user information
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+
+        // Update driver-specific information
+        if (whatsappNumber != null && !whatsappNumber.trim().isEmpty()) {
+            driver.setWhatsappNumber(whatsappNumber.trim());
+        }
+
+        // NEW: Set vehicle type
+        if (vehicleType != null) {
+            driver.setVehicleType(vehicleType);
+            log.info("Vehicle type set to: {}", vehicleType);
+        }
+
+        // Save both entities
+        userRepository.save(user);
+        driver = driverRepository.save(driver);
+
+        // Generate new tokens with updated profile
+        String accessToken = jwtService.generateAccessToken(driverId, user.getPhoneNumber(), "DRIVER");
+        String refreshToken = jwtService.generateRefreshToken(driverId, user.getPhoneNumber());
+
+        log.info("Driver profile setup completed for: {}", driverId);
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(3600L)
+                .userId(driverId)
+                .userType("DRIVER")
+                .phoneNumber(user.getPhoneNumber())
+                .firstName(firstName)
+                .lastName(lastName)
+                .email(user.getEmail())
+                .isActive(user.getIsActive())
+                .isVerified(driver.getIsVerified())
+                .loginTime(LocalDateTime.now())
+                .isNewRegistration(false)
+                .registrationMessage("Profile setup completed successfully!")
+                .nextStep(vehicleType != null ? "Start uploading documents" : "Select your vehicle type and upload documents")
+                .build();
+    }
+
 
     @Transactional
     public AuthResponse registerDriver(DriverRegistrationRequest request) {
@@ -353,6 +429,7 @@ public class DriverService {
                 .licenseNumber(driver.getLicenseNumber())
                 .licenseExpiry(driver.getLicenseExpiry())
                 .vehicleRegistration(driver.getVehicleRegistration())
+                .vehicleType(driver.getVehicleType()) // Vehicle type included
                 .whatsappNumber(driver.getWhatsappNumber())
                 .totalEarnings(driver.getTotalEarnings())
                 .totalRidesCompleted(driver.getTotalRidesCompleted())

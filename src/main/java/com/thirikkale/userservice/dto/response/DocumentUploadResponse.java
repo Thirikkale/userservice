@@ -1,6 +1,7 @@
 package com.thirikkale.userservice.dto.response;
 
 import com.thirikkale.userservice.model.enums.DocumentType;
+import com.thirikkale.userservice.model.enums.VehicleType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,6 +36,23 @@ public class DocumentUploadResponse {
 
     // NEW: Raw extracted text from OCR
     private String extractedText;
+
+    private VehicleType vehicleType;
+    private String vehicleModel; //future
+    private String vehicleColor; //future
+
+//New helper method
+    public static DocumentUploadResponse vehicleTypeSuccess(UUID driverId, VehicleType vehicleType, String message) {
+        return DocumentUploadResponse.builder()
+                .driverId(driverId)
+                .documentType(DocumentType.VEHICLE_TYPE_DECLARATION)
+                .uploaded(true)
+                .message(message)
+                .vehicleType(vehicleType)
+                .verificationProgress(10) // Small progress for vehicle type
+                .nextStep("Continue uploading required documents")
+                .build();
+    }
 
     // Document verification fields
     private String documentVerificationStatus; // PENDING, IN_PROGRESS, VERIFIED, REJECTED

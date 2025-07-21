@@ -2,10 +2,12 @@ package com.thirikkale.userservice.controller;
 
 import com.thirikkale.userservice.dto.request.DriverProfileSetupRequest;
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
+import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
 import com.thirikkale.userservice.model.enums.DocumentType;
+import com.thirikkale.userservice.model.enums.VehicleType;
 import com.thirikkale.userservice.service.DriverDocumentService;
 import com.thirikkale.userservice.service.DriverService;
 import com.thirikkale.userservice.service.MultiRoleAuthService;
@@ -51,6 +53,33 @@ public class DriverController {
 
         return ResponseEntity.ok(response);
     }
+
+    //newly added
+    // NEW: Vehicle Type Management Endpoints
+    @PutMapping("/{driverId}/vehicle-type")
+    @Operation(
+            summary = "Update vehicle type",
+            description = "Update the vehicle type for a driver"
+    )
+
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DriverResponse> updateVehicleType(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody VehicleTypeUpdateRequest request) {
+        log.info("Vehicle type update request for driver: {} to {}", driverId, request.getVehicleType());
+
+        DriverResponse response = driverService.updateDriverVehicleType(driverId, request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/vehicle-types")
+    @Operation(summary = "Get available vehicle types")
+    public ResponseEntity<VehicleType[]> getVehicleTypes() {
+        log.info("Get vehicle types request received");
+        return ResponseEntity.ok(VehicleType.values());
+    }
+
 
     @PutMapping("/{driverId}/complete-profile")
     @Operation(
