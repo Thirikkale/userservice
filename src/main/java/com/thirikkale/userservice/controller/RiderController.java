@@ -54,7 +54,7 @@ public class RiderController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{riderId}/complete-profile")
+    @PutMapping("/{riderId}/complete-profile")
     @Operation(
             summary = "Step 2: Complete Profile Setup",
             description = "Complete rider profile with first name and last name after token registration."
