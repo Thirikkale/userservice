@@ -2,11 +2,14 @@ package com.thirikkale.userservice.model;
 
 import com.thirikkale.userservice.model.enums.VehicleType;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -20,12 +23,20 @@ public class Driver {
 
     @Id
     @Column(name = "driver_id")
-    private UUID driverId; // TPT: This will be set manually to match User's userId
+    private UUID driverId;
 
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.REFRESH)
     @JoinColumn(name = "driver_id", referencedColumnName = "user_id")
     private User user;
 
+    // Driver personal documents (not vehicle-specific)
+    @Column(name = "selfie_url")
+    private String selfieUrl;
+
+    @Column(name = "driving_license_url")
+    private String drivingLicenseUrl;
+
+    // Driver status
     @Column(name = "is_available")
     @Builder.Default
     private Boolean isAvailable = false;
@@ -38,18 +49,18 @@ public class Driver {
     @Builder.Default
     private Boolean isDocumentsUploaded = false;
 
-    // Verification status fields
+    // Verification status fields for personal documents
     @Column(name = "face_verification_status")
     @Builder.Default
     private String faceVerificationStatus = "PENDING";
 
-    @Column(name = "document_verification_status")
-    @Builder.Default
-    private String documentVerificationStatus = "PENDING";
-
     @Column(name = "profile_extraction_status")
     @Builder.Default
     private String profileExtractionStatus = "PENDING";
+
+    @Column(name = "document_verification_status")
+    @Builder.Default
+    private String documentVerificationStatus = "PENDING";
 
     @Column(name = "verification_date")
     private LocalDateTime verificationDate;
@@ -60,15 +71,6 @@ public class Driver {
 
     @Column(name = "license_expiry")
     private LocalDate licenseExpiry;
-
-    // Vehicle information
-    @Column(name = "vehicle_registration", unique = true)
-    private String vehicleRegistration;
-
-    // NEW: Add vehicle type
-    @Enumerated(EnumType.STRING)
-    @Column(name = "vehicle_type")
-    private VehicleType vehicleType;
 
     @Column(name = "whatsapp_number")
     private String whatsappNumber;
@@ -96,22 +98,6 @@ public class Driver {
     @Builder.Default
     private BigDecimal rating = BigDecimal.ZERO;
 
-    // Document URLs (stored after upload)
-    @Column(name = "selfie_url")
-    private String selfieUrl;
-
-    @Column(name = "driving_license_url")
-    private String drivingLicenseUrl;
-
-    @Column(name = "revenue_license_url")
-    private String revenueLicenseUrl;
-
-    @Column(name = "vehicle_registration_url")
-    private String vehicleRegistrationUrl;
-
-    @Column(name = "vehicle_insurance_url")
-    private String vehicleInsuranceUrl;
-
     // Face verification scores
     @Column(name = "face_match_score")
     private Double faceMatchScore;
@@ -119,6 +105,16 @@ public class Driver {
     @Column(name = "face_verification_attempts")
     @Builder.Default
     private Integer faceVerificationAttempts = 0;
+
+    // Vehicles relationship
+    @OneToMany(mappedBy = "driver", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<Vehicle> vehicles = new ArrayList<>();
+
+    // Primary vehicle (the one currently being used)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "primary_vehicle_id")
+    private Vehicle primaryVehicle;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -145,24 +141,60 @@ public class Driver {
     // Helper methods
     public boolean isFullyVerified() {
         return isVerified && "VERIFIED".equals(faceVerificationStatus) &&
-                "VERIFIED".equals(documentVerificationStatus) &&
-                "COMPLETED".equals(profileExtractionStatus);
+                "COMPLETED".equals(profileExtractionStatus) &&
+                hasAtLeastOneVerifiedVehicle();
+    }
+
+    public boolean hasAtLeastOneVerifiedVehicle() {
+        return vehicles.stream().anyMatch(Vehicle::isFullyVerified);
     }
 
     public boolean canGoOnline() {
-        return isFullyVerified() && isDocumentsUploaded;
+        return isFullyVerified() && isDocumentsUploaded && primaryVehicle != null;
     }
 
     public int getVerificationProgress() {
         int progress = 0;
-        if (isDocumentsUploaded)
-            progress += 25;
-        if ("COMPLETED".equals(profileExtractionStatus))
-            progress += 25;
-        if ("VERIFIED".equals(documentVerificationStatus))
-            progress += 25;
-        if ("VERIFIED".equals(faceVerificationStatus))
-            progress += 25;
+
+        // Personal documents progress (60% of total)
+        if (isDocumentsUploaded) progress += 30;
+        if ("COMPLETED".equals(profileExtractionStatus)) progress += 15;
+        if ("VERIFIED".equals(faceVerificationStatus)) progress += 15;
+
+        // Vehicle documents progress (40% of total)
+        if (hasAtLeastOneVerifiedVehicle()) progress += 40;
+
         return progress;
     }
+
+    public long getVerifiedVehicleCount() {
+        return vehicles.stream().mapToLong(v -> v.isFullyVerified() ? 1 : 0).sum();
+    }
+
+    public long getTotalVehicleCount() {
+        return vehicles.size();
+    }
+
+    // Legacy methods for backward compatibility (deprecated - will be removed)
+    @Deprecated
+    public String getRevenueLicenseUrl() {
+        return primaryVehicle != null ? primaryVehicle.getRevenueLicenseUrl() : null;
+    }
+
+    @Deprecated
+    public String getVehicleRegistrationUrl() {
+        return primaryVehicle != null ? primaryVehicle.getVehicleRegistrationUrl() : null;
+    }
+
+    @Deprecated
+    public String getVehicleInsuranceUrl() {
+        return primaryVehicle != null ? primaryVehicle.getVehicleInsuranceUrl() : null;
+    }
+
+    @Deprecated
+    public String getVehicleRegistration() {
+        return primaryVehicle != null ? primaryVehicle.getVehicleRegistration() : null;
+    }
+
+
 }

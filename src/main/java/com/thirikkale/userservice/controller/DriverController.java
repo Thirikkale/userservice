@@ -3,10 +3,12 @@ package com.thirikkale.userservice.controller;
 import com.thirikkale.userservice.dto.request.DriverProfileSetupRequest;
 import com.thirikkale.userservice.dto.request.DriverProfileUpdateRequest;
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
+import com.thirikkale.userservice.dto.request.VehicleRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
+import com.thirikkale.userservice.dto.response.VehicleResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Driver;
 import com.thirikkale.userservice.model.enums.DocumentType;
@@ -36,6 +38,7 @@ import java.util.UUID;
 public class DriverController {
 
     private final DriverService driverService;
+    private final VehicleService vehicleService;
     private final DriverDocumentService driverDocumentService;
     private final MultiRoleAuthService multiRoleAuthService;
     private final MultiRoleLoginService multiRoleLoginService;
@@ -58,33 +61,6 @@ public class DriverController {
 
         return ResponseEntity.ok(response);
     }
-
-    //newly added
-    // NEW: Vehicle Type Management Endpoints
-    @PutMapping("/{driverId}/vehicle-type")
-    @Operation(
-            summary = "Update vehicle type",
-            description = "Update the vehicle type for a driver"
-    )
-
-    @PreAuthorize("hasRole('DRIVER')")
-    public ResponseEntity<DriverResponse> updateVehicleType(
-            @PathVariable UUID driverId,
-            @Valid @RequestBody VehicleTypeUpdateRequest request) {
-        log.info("Vehicle type update request for driver: {} to {}", driverId, request.getVehicleType());
-
-        DriverResponse response = driverService.updateDriverVehicleType(driverId, request);
-
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/vehicle-types")
-    @Operation(summary = "Get available vehicle types")
-    public ResponseEntity<VehicleType[]> getVehicleTypes() {
-        log.info("Get vehicle types request received");
-        return ResponseEntity.ok(VehicleType.values());
-    }
-
 
     @PutMapping("/{driverId}/complete-profile")
     @Operation(
@@ -121,8 +97,50 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
-    // Document Upload Endpoints
+    // Vehicle Management Endpoints
+    @PostMapping("/{driverId}/vehicles")
+    @Operation(summary = "Register a new vehicle")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<VehicleResponse> registerVehicle(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody VehicleRegistrationRequest request) {
+        log.info("Vehicle registration request for driver: {}", driverId);
+        VehicleResponse response = vehicleService.registerVehicle(driverId, request);
+        return ResponseEntity.ok(response);
+    }
 
+    @GetMapping("/{driverId}/vehicles")
+    @Operation(summary = "Get all vehicles for a driver")
+    @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT')")
+    public ResponseEntity<List<VehicleResponse>> getDriverVehicles(@PathVariable UUID driverId) {
+        log.info("Get vehicles request for driver: {}", driverId);
+        List<VehicleResponse> response = vehicleService.getDriverVehicles(driverId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{driverId}/vehicles/{vehicleId}")
+    @Operation(summary = "Get specific vehicle details")
+    @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT')")
+    public ResponseEntity<VehicleResponse> getVehicleById(
+            @PathVariable UUID driverId,
+            @PathVariable UUID vehicleId) {
+        log.info("Get vehicle {} for driver: {}", vehicleId, driverId);
+        VehicleResponse response = vehicleService.getVehicleById(driverId, vehicleId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{driverId}/vehicles/{vehicleId}/set-primary")
+    @Operation(summary = "Set vehicle as primary")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<VehicleResponse> setPrimaryVehicle(
+            @PathVariable UUID driverId,
+            @PathVariable UUID vehicleId) {
+        log.info("Set primary vehicle {} for driver: {}", vehicleId, driverId);
+        VehicleResponse response = vehicleService.setPrimaryVehicle(driverId, vehicleId);
+        return ResponseEntity.ok(response);
+    }
+
+    // Personal Document Upload Endpoints
     @PostMapping("/{driverId}/documents/selfie")
     @Operation(summary = "Upload driver selfie (Step 3a)")
     @PreAuthorize("hasRole('DRIVER')")
@@ -147,46 +165,49 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{driverId}/documents/revenue-license")
-    @Operation(summary = "Upload revenue license (Step 3c)")
+    // Vehicle Document Upload Endpoints
+    @PostMapping("/{driverId}/vehicles/{vehicleId}/documents/revenue-license")
+    @Operation(summary = "Upload revenue license for specific vehicle")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadRevenueLicense(
             @PathVariable UUID driverId,
+            @PathVariable UUID vehicleId,
             @RequestParam("file") MultipartFile file) {
-        log.info("Revenue license upload request for driver: {}", driverId);
-        DocumentUploadResponse response = driverDocumentService.uploadDriverDocument(
-                driverId, DocumentType.REVENUE_LICENSE, file);
+        log.info("Revenue license upload for vehicle {} of driver: {}", vehicleId, driverId);
+        DocumentUploadResponse response = driverDocumentService.uploadVehicleDocument(
+                driverId, vehicleId, DocumentType.REVENUE_LICENSE, file);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{driverId}/documents/vehicle-registration")
-    @Operation(summary = "Upload vehicle registration (Step 3d)")
+    @PostMapping("/{driverId}/vehicles/{vehicleId}/documents/vehicle-registration")
+    @Operation(summary = "Upload vehicle registration document")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadVehicleRegistration(
             @PathVariable UUID driverId,
+            @PathVariable UUID vehicleId,
             @RequestParam("file") MultipartFile file) {
-        log.info("Vehicle registration upload request for driver: {}", driverId);
-        DocumentUploadResponse response = driverDocumentService.uploadDriverDocument(
-                driverId, DocumentType.VEHICLE_REGISTRATION, file);
+        log.info("Vehicle registration upload for vehicle {} of driver: {}", vehicleId, driverId);
+        DocumentUploadResponse response = driverDocumentService.uploadVehicleDocument(
+                driverId, vehicleId, DocumentType.VEHICLE_REGISTRATION, file);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{driverId}/documents/vehicle-insurance")
-    @Operation(summary = "Upload vehicle insurance (Step 3e)")
+    @PostMapping("/{driverId}/vehicles/{vehicleId}/documents/vehicle-insurance")
+    @Operation(summary = "Upload vehicle insurance document")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DocumentUploadResponse> uploadVehicleInsurance(
             @PathVariable UUID driverId,
+            @PathVariable UUID vehicleId,
             @RequestParam("file") MultipartFile file) {
-        log.info("Vehicle insurance upload request for driver: {}", driverId);
-        DocumentUploadResponse response = driverDocumentService.uploadDriverDocument(
-                driverId, DocumentType.VEHICLE_INSURANCE, file);
+        log.info("Vehicle insurance upload for vehicle {} of driver: {}", vehicleId, driverId);
+        DocumentUploadResponse response = driverDocumentService.uploadVehicleDocument(
+                driverId, vehicleId, DocumentType.VEHICLE_INSURANCE, file);
         return ResponseEntity.ok(response);
     }
 
     // Driver Profile and Status Endpoints
-
     @GetMapping("/{driverId}")
-    @Operation(summary = "Get driver profile and verification status")
+    @Operation(summary = "Get driver by ID")
     @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT')")
     public ResponseEntity<DriverResponse> getDriverById(@PathVariable UUID driverId) {
         log.info("Get driver request for ID: {}", driverId);
@@ -198,7 +219,7 @@ public class DriverController {
     @Operation(summary = "Get driver document processing status")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DriverResponse> getProcessingStatus(@PathVariable UUID driverId) {
-        log.info("Get processing status for driver: {}", driverId);
+        log.info("Processing status request for driver: {}", driverId);
         DriverResponse response = driverService.getDriverById(driverId);
         return ResponseEntity.ok(response);
     }
@@ -209,37 +230,32 @@ public class DriverController {
     public ResponseEntity<DriverResponse> updateAvailability(
             @PathVariable UUID driverId,
             @RequestParam boolean isAvailable) {
-        log.info("Update driver availability: {} - {}", driverId, isAvailable);
+        log.info("Update availability request for driver: {} - {}", driverId, isAvailable);
         DriverResponse response = driverService.updateDriverAvailability(driverId, isAvailable);
         return ResponseEntity.ok(response);
     }
 
-    // Admin/Support Agent Operations
+    @PutMapping("/{driverId}/profile")
+    @Operation(
+            summary = "Update driver profile",
+            description = "Update driver profile information like name, date of birth, etc."
+    )
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<DriverResponse> updateDriverProfile(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody DriverProfileUpdateRequest request) {
+        log.info("Update driver profile request for: {}", driverId);
+        DriverResponse response = driverService.updateDriverProfile(driverId, request);
+        return ResponseEntity.ok(response);
+    }
 
+    // Admin/Support Agent Operations
     @GetMapping
     @Operation(summary = "Get all drivers (Admin/Support)")
     @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER_SUPPORT_AGENT')")
     public ResponseEntity<List<DriverResponse>> getAllDrivers() {
-        log.info("Get all drivers request");
+        log.info("Get all drivers request received");
         List<DriverResponse> response = driverService.getAllDrivers();
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/pending-documents")
-    @Operation(summary = "Get drivers who need to upload documents")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER_SUPPORT_AGENT')")
-    public ResponseEntity<List<DriverResponse>> getDriversPendingDocuments() {
-        log.info("Get drivers pending documents request");
-        List<DriverResponse> response = driverService.getDriversPendingDocuments();
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/pending-verification")
-    @Operation(summary = "Get drivers pending verification")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER_SUPPORT_AGENT')")
-    public ResponseEntity<List<DriverResponse>> getPendingVerificationDrivers() {
-        log.info("Get pending verification drivers request");
-        List<DriverResponse> response = driverService.getPendingVerificationDrivers();
         return ResponseEntity.ok(response);
     }
 
@@ -247,7 +263,7 @@ public class DriverController {
     @Operation(summary = "Get available drivers")
     @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER_SUPPORT_AGENT')")
     public ResponseEntity<List<DriverResponse>> getAvailableDrivers() {
-        log.info("Get available drivers request");
+        log.info("Get available drivers request received");
         List<DriverResponse> response = driverService.getAvailableDrivers();
         return ResponseEntity.ok(response);
     }
@@ -259,7 +275,7 @@ public class DriverController {
             @PathVariable UUID driverId,
             @RequestParam boolean isVerified,
             @RequestParam(required = false) String notes) {
-        log.info("Manual verification update for driver: {} - {}", driverId, isVerified);
+        log.info("Update verification status request for driver: {} - {}", driverId, isVerified);
         DriverResponse response = driverService.updateDriverVerificationStatus(driverId, isVerified, notes);
         return ResponseEntity.ok(response);
     }
@@ -280,36 +296,27 @@ public class DriverController {
         Map<String, Object> documents = new HashMap<>();
         documents.put("selfie", createDocumentStatus("SELFIE", driver.getSelfieUrl()));
         documents.put("drivingLicense", createDocumentStatus("DRIVING_LICENSE", driver.getDrivingLicenseUrl()));
-        documents.put("revenueLicense", createDocumentStatus("REVENUE_LICENSE", driver.getRevenueLicenseUrl()));
-        documents.put("vehicleRegistration", createDocumentStatus("VEHICLE_REGISTRATION", driver.getVehicleRegistrationUrl()));
-        documents.put("vehicleInsurance", createDocumentStatus("VEHICLE_INSURANCE", driver.getVehicleInsuranceUrl()));
 
         status.put("documents", documents);
         status.put("verificationProgress", driver.getVerificationProgress());
+        status.put("faceVerificationStatus", driver.getFaceVerificationStatus());
+        status.put("profileExtractionStatus", driver.getProfileExtractionStatus());
 
         return ResponseEntity.ok(status);
     }
 
     private Map<String, Object> createDocumentStatus(String type, String url) {
-        Map<String, Object> docStatus = new HashMap<>();
-        docStatus.put("uploaded", url != null);
-        docStatus.put("url", url);
-        docStatus.put("exists", url != null ? fileStorageService.fileExists(url) : false);
-        return docStatus;
+        Map<String, Object> status = new HashMap<>();
+        status.put("type", type);
+        status.put("uploaded", url != null);
+        status.put("url", url);
+        return status;
     }
 
-    // Add the missing profile update endpoint
-    @PutMapping("/{driverId}/profile")
-    @Operation(
-            summary = "Update driver profile",
-            description = "Update driver profile information like name, date of birth, etc."
-    )
-    @PreAuthorize("hasRole('DRIVER')")
-    public ResponseEntity<DriverResponse> updateDriverProfile(
-            @PathVariable UUID driverId,
-            @Valid @RequestBody DriverProfileUpdateRequest request) {
-        log.info("Profile update request for driver: {}", driverId);
-        DriverResponse response = driverService.updateDriverProfile(driverId, request);
-        return ResponseEntity.ok(response);
+    @GetMapping("/vehicle-types")
+    @Operation(summary = "Get available vehicle types")
+    public ResponseEntity<VehicleType[]> getVehicleTypes() {
+        log.info("Get vehicle types request received");
+        return ResponseEntity.ok(VehicleType.values());
     }
 }

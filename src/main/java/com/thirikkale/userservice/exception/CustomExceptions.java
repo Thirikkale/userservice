@@ -56,7 +56,6 @@ public class CustomExceptions {
         }
     }
 
-    // Add this missing exception class
     public static class DocumentUploadException extends RuntimeException {
         public DocumentUploadException(String message) {
             super(message);
@@ -85,6 +84,25 @@ public class CustomExceptions {
     // Authentication-specific exceptions
     public static class InvalidCredentialsException extends RuntimeException {
         public InvalidCredentialsException(String message) {
+            super(message);
+        }
+    }
+
+    // Vehicle-specific exceptions
+    public static class VehicleAlreadyExistsException extends RuntimeException {
+        public VehicleAlreadyExistsException(String message) {
+            super(message);
+        }
+    }
+
+    public static class VehicleNotFoundException extends RuntimeException {
+        public VehicleNotFoundException(String message) {
+            super(message);
+        }
+    }
+
+    public static class VehicleNotVerifiedException extends RuntimeException {
+        public VehicleNotVerifiedException(String message) {
             super(message);
         }
     }

@@ -4,9 +4,11 @@ import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Driver;
 import com.thirikkale.userservice.model.User;
+import com.thirikkale.userservice.model.Vehicle;
 import com.thirikkale.userservice.model.enums.DocumentType;
 import com.thirikkale.userservice.repository.DriverRepository;
 import com.thirikkale.userservice.repository.UserRepository;
+import com.thirikkale.userservice.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -30,94 +32,109 @@ public class DriverDocumentService {
 
     private final DriverRepository driverRepository;
     private final UserRepository userRepository;
+    private final VehicleRepository vehicleRepository;
     private final FileStorageService fileStorageService;
     private final OCRService ocrService;
     private final FaceVerificationService faceVerificationService;
     private final DriverService driverService;
 
     /**
-     * Upload driver document - ENHANCED with immediate transaction release
+     * Upload driver personal document (selfie, driving license)
      */
     @Transactional
     public DocumentUploadResponse uploadDriverDocument(UUID driverId, DocumentType documentType, MultipartFile file) {
-        log.info("Processing document upload for driver {} - type: {}", driverId, documentType);
+        log.info("Processing personal document upload for driver {} - type: {}", driverId, documentType);
 
         try {
-            // 1. Validate driver exists
+            fileStorageService.validateFile(file);
+
             Driver driver = driverRepository.findById(driverId)
-                    .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found: " + driverId));
+                    .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
 
-            // 2. Validate file
-            validateFile(file, documentType);
-
-            // 3. Store file and get URL (this is fast, keep in transaction)
+            // Store the file
             String fileUrl = fileStorageService.storeDriverDocument(driverId, documentType, file);
-            log.info("File stored at: {}", fileUrl);
 
-            // 4. Update driver with document URL
+            // Update driver with document URL
             updateDriverDocumentUrl(driver, documentType, fileUrl);
 
-            // 5. Initialize face verification attempts if null
-            if (driver.getFaceVerificationAttempts() == null) {
-                driver.setFaceVerificationAttempts(0);
-            }
+            // Process based on document type
+            String extractedText = processDocument(driver, documentType, file, fileUrl);
 
-            // 6. FOR DRIVING LICENSE: Set status and save immediately
-            if (documentType == DocumentType.DRIVING_LICENSE) {
-                driver.setProfileExtractionStatus("IN_PROGRESS");
-            }
+            // Update document upload status
+            updateDocumentUploadStatus(driver);
 
-            // 7. Process other documents synchronously (fast operations)
-            if (documentType != DocumentType.DRIVING_LICENSE) {
-                processDocument(driver, documentType, file, fileUrl);
-                updateDocumentUploadStatus(driver);
-            }
+            // Save driver
+            driverRepository.save(driver);
 
-            // 8. Save state and RELEASE transaction immediately
-            driver = driverRepository.save(driver);
-            driverRepository.flush();
-
-            // 9. Build immediate response BEFORE starting async processing
-            DocumentUploadResponse response;
-            if (documentType == DocumentType.DRIVING_LICENSE) {
-                response = buildImmediateResponse(driver, documentType, fileUrl, "Document uploaded. OCR processing started...");
-            } else {
-                response = buildDocumentUploadResponse(driver, documentType, fileUrl, null);
-            }
-
-            // 10. Start async processing AFTER transaction is committed and response is built
-            if (documentType == DocumentType.DRIVING_LICENSE) {
-                // FIXED: Store file content before async processing
-                startAsyncOcrProcessingDetached(driverId, fileUrl);
-            }
-
-            log.info("Document upload completed for driver {} - type: {}", driverId, documentType);
-            return response;
+            log.info("Personal document uploaded successfully for driver: {} - type: {}", driverId, documentType);
+            return buildDocumentUploadResponse(driver, documentType, fileUrl, extractedText);
 
         } catch (Exception e) {
-            log.error("Document upload failed for driver {} - type {}: {}", driverId, documentType, e.getMessage());
-            throw new CustomExceptions.DocumentUploadException("Document upload failed: " + e.getMessage());
+            log.error("Failed to upload personal document for driver {}: {}", driverId, e.getMessage());
+            return DocumentUploadResponse.failure(driverId, documentType,
+                    "Document upload failed: " + e.getMessage());
         }
     }
 
     /**
-     * Start async OCR processing - using file URL instead of MultipartFile
+     * Upload vehicle-specific document
+     */
+    @Transactional
+    public DocumentUploadResponse uploadVehicleDocument(UUID driverId, UUID vehicleId,
+                                                        DocumentType documentType, MultipartFile file) {
+        log.info("Processing vehicle document upload for driver {} vehicle {} - type: {}",
+                driverId, vehicleId, documentType);
+
+        try {
+            fileStorageService.validateFile(file);
+
+            Driver driver = driverRepository.findById(driverId)
+                    .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+            Vehicle vehicle = vehicleRepository.findByDriverIdAndVehicleId(driverId, vehicleId)
+                    .orElseThrow(() -> new CustomExceptions.VehicleNotFoundException("Vehicle not found"));
+
+            // Store the file
+            String fileUrl = fileStorageService.storeDriverDocument(driverId, documentType, file);
+
+            // Update vehicle with document URL
+            updateVehicleDocumentUrl(vehicle, documentType, fileUrl);
+
+            // Update vehicle document upload status
+            updateVehicleDocumentUploadStatus(vehicle);
+
+            // Save vehicle
+            vehicleRepository.save(vehicle);
+
+            log.info("Vehicle document uploaded successfully for driver: {} vehicle: {} - type: {}",
+                    driverId, vehicleId, documentType);
+
+            return buildVehicleDocumentUploadResponse(driver, vehicle, documentType, fileUrl);
+
+        } catch (Exception e) {
+            log.error("Failed to upload vehicle document for driver {} vehicle {}: {}",
+                    driverId, vehicleId, e.getMessage());
+            return DocumentUploadResponse.failure(driverId, documentType,
+                    "Vehicle document upload failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Start async OCR processing for driving license
      */
     private void startAsyncOcrProcessingDetached(UUID driverId, String fileUrl) {
-        // Create a new thread that's completely independent
         new Thread(() -> {
             try {
-                // Small delay to ensure main transaction is fully committed
-                Thread.sleep(200);
+                Thread.sleep(100);
                 processDriverLicenseAsync(driverId, fileUrl);
             } catch (Exception e) {
-                log.error("Failed to start async OCR processing: {}", e.getMessage());
+                log.error("Failed to start async OCR processing for driver {}: {}", driverId, e.getMessage());
             }
         }, "OCR-Processing-" + driverId).start();
     }
 
     /**
-     * Async OCR processing for driving license - FIXED to use file path
+     * Async OCR processing for driving license
      */
     @Async("aiProcessingExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -125,54 +142,42 @@ public class DriverDocumentService {
         log.info("Starting async OCR processing for driver: {}", driverId);
 
         try {
-            // Get fresh driver instance in new transaction
-            Driver driver = driverRepository.findById(driverId)
-                    .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found: " + driverId));
+            Driver driver = driverRepository.findById(driverId).orElse(null);
+            if (driver == null) {
+                log.error("Driver not found for OCR processing: {}", driverId);
+                return CompletableFuture.completedFuture(null);
+            }
 
-            // FIXED: Convert URL to absolute file path and read as Path
+            updateOcrStatus(driverId, "IN_PROGRESS");
+
             String absolutePath = convertUrlToAbsolutePath(fileUrl);
             Path filePath = Paths.get(absolutePath);
 
             if (!Files.exists(filePath)) {
-                throw new IOException("File not found: " + absolutePath);
+                log.error("File not found for OCR processing: {}", absolutePath);
+                updateOcrStatus(driverId, "FAILED");
+                return CompletableFuture.completedFuture(null);
             }
 
-            // Extract information from driving license using OCR with file path
-            var ocrResult = ocrService.extractDrivingLicenseInfoFromPath(filePath);
+            OCRService.DrivingLicenseInfo licenseInfo = ocrService.extractDrivingLicenseInfoFromPath(filePath);
 
-            if (ocrResult != null && ocrResult.getFirstName() != null) {
-                log.info("OCR extraction successful for driver: {}", driverId);
+            if (licenseInfo != null && licenseInfo.getFirstName() != null) {
+                driverService.updateDriverProfileFromOCR(
+                        driverId,
+                        licenseInfo.getFirstName(),
+                        licenseInfo.getLastName(),
+                        licenseInfo.getLicenseNumber(),
+                        licenseInfo.getExpiryDate()
+                );
 
-                try {
-                    // Update driver profile with extracted information - with error handling
-                    driverService.updateDriverProfileFromOCR(
-                            driver.getDriverId(),
-                            ocrResult.getFirstName(),
-                            ocrResult.getLastName(),
-                            ocrResult.getLicenseNumber(),
-                            ocrResult.getExpiryDate()
-                    );
-
-                    // Update OCR status in a separate transaction
-                    updateOcrStatus(driverId, "COMPLETED");
-
-                    // Check if face verification can be started
-                    startFaceVerificationIfReady(driver);
-
-                    log.info("Async OCR processing completed successfully for driver: {}", driverId);
-
-                } catch (Exception e) {
-                    log.error("Failed to update driver profile from OCR for driver {}: {}", driverId, e.getMessage());
-                    updateOcrStatus(driverId, "FAILED");
-                }
-
+                updateOcrStatus(driverId, "COMPLETED");
+                startFaceVerificationIfReady(driver);
             } else {
-                log.warn("OCR extraction failed for driver: {}", driverId);
                 updateOcrStatus(driverId, "FAILED");
             }
 
         } catch (Exception e) {
-            log.error("Async OCR processing failed for driver {}: {}", driverId, e.getMessage());
+            log.error("OCR processing failed for driver {}: {}", driverId, e.getMessage());
             updateOcrStatus(driverId, "FAILED");
         }
 
@@ -202,20 +207,15 @@ public class DriverDocumentService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void startFaceVerificationIfReady(Driver driver) {
         try {
-            // Refresh driver state
-            driver = driverRepository.findById(driver.getDriverId()).orElse(driver);
+            if (driver.getSelfieUrl() != null && driver.getDrivingLicenseUrl() != null &&
+                    "COMPLETED".equals(driver.getProfileExtractionStatus()) &&
+                    !"VERIFIED".equals(driver.getFaceVerificationStatus())) {
 
-            // If selfie is already uploaded and OCR is completed, start face verification
-            if (driver.getSelfieUrl() != null &&
-                    "COMPLETED".equals(driver.getProfileExtractionStatus())) {
-
-                log.info("Starting face verification for driver: {}", driver.getDriverId());
-
-                // Use separate method call instead of lambda
                 startAsyncFaceVerificationDetached(driver.getDriverId());
             }
         } catch (Exception e) {
-            log.error("Failed to check face verification readiness: {}", e.getMessage());
+            log.error("Failed to check face verification readiness for driver {}: {}",
+                    driver.getDriverId(), e.getMessage());
         }
     }
 
@@ -225,10 +225,10 @@ public class DriverDocumentService {
     private void startAsyncFaceVerificationDetached(UUID driverId) {
         new Thread(() -> {
             try {
-                Thread.sleep(200);
+                Thread.sleep(500);
                 startFaceVerificationAsync(driverId);
             } catch (Exception e) {
-                log.error("Failed to start async face verification: {}", e.getMessage());
+                log.error("Failed to start async face verification for driver {}: {}", driverId, e.getMessage());
             }
         }, "FaceVerification-" + driverId).start();
     }
@@ -242,26 +242,22 @@ public class DriverDocumentService {
         log.info("Starting async face verification for driver: {}", driverId);
 
         try {
-            // Get fresh driver instance
             Driver driver = driverRepository.findById(driverId)
                     .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found: " + driverId));
 
-            // Validate both images are available
             if (driver.getSelfieUrl() == null || driver.getDrivingLicenseUrl() == null) {
                 log.warn("Cannot start face verification - missing images for driver: {}", driverId);
                 updateFaceVerificationStatus(driverId, "PENDING", 0.0);
                 return CompletableFuture.completedFuture(null);
             }
 
-            // Update status
             updateFaceVerificationStatus(driverId, "IN_PROGRESS", null);
             incrementFaceVerificationAttempts(driverId);
 
-            // Perform face verification with timeout
             performFaceVerificationWithTimeout(driver);
 
         } catch (Exception e) {
-            log.error("Async face verification failed for driver {}: {}", driverId, e.getMessage());
+            log.error("Face verification failed for driver {}: {}", driverId, e.getMessage());
             updateFaceVerificationStatus(driverId, "FAILED", 0.0);
         }
 
@@ -309,13 +305,11 @@ public class DriverDocumentService {
 
     private void performFaceVerificationWithTimeout(Driver driver) {
         try {
-            // Convert URLs to absolute paths
             String selfieAbsolutePath = convertUrlToAbsolutePath(driver.getSelfieUrl());
             String licenseAbsolutePath = convertUrlToAbsolutePath(driver.getDrivingLicenseUrl());
 
             log.info("Face verification files - Selfie: {}, License: {}", selfieAbsolutePath, licenseAbsolutePath);
 
-            // Verify files exist
             if (!fileStorageService.fileExists(selfieAbsolutePath) ||
                     !fileStorageService.fileExists(licenseAbsolutePath)) {
 
@@ -324,22 +318,17 @@ public class DriverDocumentService {
                 return;
             }
 
-            // Perform face matching with timeout
             var faceMatchResult = faceVerificationService.verifyFaceMatch(
                     selfieAbsolutePath,
                     licenseAbsolutePath
             );
 
-            // Process results
             double confidenceScore = faceMatchResult.getConfidenceScore() != null ?
                     faceMatchResult.getConfidenceScore() : 0.0;
 
-            // Use 0.5 threshold (50%) as per requirement
             double threshold = 0.5;
 
-            // FIXED: Check for actual match result, not just error message
             if (faceMatchResult.getMatch() != null && faceMatchResult.getMatch()) {
-                // We have a successful match
                 if (confidenceScore > threshold) {
                     updateFaceVerificationStatus(driver.getDriverId(), "VERIFIED", confidenceScore);
                     log.info("Face verification PASSED for driver: {} with confidence: {:.1%}",
@@ -350,7 +339,6 @@ public class DriverDocumentService {
                             driver.getDriverId(), confidenceScore, threshold);
                 }
             } else {
-                // No match or error occurred
                 String errorMessage = faceMatchResult.getErrorMessage();
                 if (errorMessage != null && !errorMessage.isEmpty()) {
                     log.error("Face verification error for driver {}: {}", driver.getDriverId(), errorMessage);
@@ -368,7 +356,7 @@ public class DriverDocumentService {
     }
 
     /**
-     * FIXED: Single convertUrlToAbsolutePath method
+     * Convert URL to absolute path
      */
     private String convertUrlToAbsolutePath(String relativeUrl) {
         String cleanPath = relativeUrl.startsWith("/") ? relativeUrl.substring(1) : relativeUrl;
@@ -395,180 +383,118 @@ public class DriverDocumentService {
     }
 
     /**
-     * Process document based on type - MODIFIED for async handling
+     * Process document based on type
      */
     private String processDocument(Driver driver, DocumentType documentType, MultipartFile file, String fileUrl) {
-        updateDriverDocumentUrl(driver, documentType, fileUrl);
+        switch (documentType) {
+            case SELFIE:
+                processSelfie(driver);
+                return "Selfie uploaded for face verification";
 
-        // ENHANCED: Update profile photo URL for selfie uploads
-        if (documentType == DocumentType.SELFIE) {
-            User user = driver.getUser();
-            if (user != null) {
-                user.setProfilePhotoUrl(fileUrl);
-                userRepository.save(user);
-                log.info("Updated profile photo URL for driver: {}", driver.getDriverId());
-            }
+            case DRIVING_LICENSE:
+                startAsyncOcrProcessingDetached(driver.getDriverId(), fileUrl);
+                return "Driving license uploaded - extracting information...";
+
+            default:
+                return "Document uploaded successfully";
         }
-
-        if (documentType == DocumentType.SELFIE) {
-            processSelfie(driver);
-            return "Selfie uploaded successfully. Profile photo updated.";
-        } else if (documentType == DocumentType.DRIVING_LICENSE) {
-            return "OCR processing started asynchronously.";
-        } else if (EnumSet.of(
-                DocumentType.REVENUE_LICENSE,
-                DocumentType.VEHICLE_REGISTRATION,
-                DocumentType.VEHICLE_INSURANCE
-        ).contains(documentType)) {
-            processOtherDocument(driver, documentType);
-            return documentType.name() + " uploaded successfully.";
-        } else {
-            return "Unsupported document type: " + documentType.name();
-        }
-
     }
 
     /**
-     * Process selfie upload - FIXED to avoid lambda issues
+     * Process selfie upload
      */
     private void processSelfie(Driver driver) {
-        log.info("Processing selfie for driver: {}", driver.getDriverId());
-
-        // Update the user's profile photo URL with the selfie URL
-        User user = driver.getUser();
-        if (user != null && driver.getSelfieUrl() != null) {
-            user.setProfilePhotoUrl(driver.getSelfieUrl());
-            userRepository.save(user);
-            log.info("Updated profile photo URL for driver: {}", driver.getDriverId());
-        }
-
-        driver.setFaceVerificationStatus("PENDING");
-
-        // If driving license OCR is completed, start async face verification
         if (driver.getDrivingLicenseUrl() != null &&
                 "COMPLETED".equals(driver.getProfileExtractionStatus())) {
-
-            log.info("Driving license OCR already completed - starting async face verification");
-
-            // FIXED: Use the correct method name
             startAsyncFaceVerificationDetached(driver.getDriverId());
-        } else {
-            log.info("Selfie uploaded, waiting for driving license OCR completion");
         }
-    }
-
-    private void processOtherDocument(Driver driver, DocumentType documentType) {
-        driver.setDocumentVerificationStatus("IN_PROGRESS");
-        log.info("{} uploaded for driver: {}", documentType, driver.getDriverId());
     }
 
     /**
-     * FIXED: Update driver document URL method - simple if-else statements
+     * Update driver document URL
      */
     private void updateDriverDocumentUrl(Driver driver, DocumentType documentType, String fileUrl) {
         if (documentType == DocumentType.SELFIE) {
             driver.setSelfieUrl(fileUrl);
         } else if (documentType == DocumentType.DRIVING_LICENSE) {
             driver.setDrivingLicenseUrl(fileUrl);
-        } else if (documentType == DocumentType.REVENUE_LICENSE) {
-            driver.setRevenueLicenseUrl(fileUrl);
+        }
+    }
+
+    /**
+     * Update vehicle document URL
+     */
+    private void updateVehicleDocumentUrl(Vehicle vehicle, DocumentType documentType, String fileUrl) {
+        if (documentType == DocumentType.REVENUE_LICENSE) {
+            vehicle.setRevenueLicenseUrl(fileUrl);
         } else if (documentType == DocumentType.VEHICLE_REGISTRATION) {
-            driver.setVehicleRegistrationUrl(fileUrl);
+            vehicle.setVehicleRegistrationUrl(fileUrl);
         } else if (documentType == DocumentType.VEHICLE_INSURANCE) {
-            driver.setVehicleInsuranceUrl(fileUrl);
+            vehicle.setVehicleInsuranceUrl(fileUrl);
         }
     }
 
+    /**
+     * Update document upload status for driver
+     */
     private void updateDocumentUploadStatus(Driver driver) {
-        boolean allUploaded = driver.getSelfieUrl() != null &&
-                driver.getDrivingLicenseUrl() != null &&
-                driver.getRevenueLicenseUrl() != null &&
-                driver.getVehicleRegistrationUrl() != null &&
-                driver.getVehicleInsuranceUrl() != null;
-
-        driver.setIsDocumentsUploaded(allUploaded);
-
-        if (allUploaded) {
-            log.info("All documents uploaded for driver: {}", driver.getDriverId());
-        }
+        boolean allPersonalDocumentsUploaded = driver.getSelfieUrl() != null &&
+                driver.getDrivingLicenseUrl() != null;
+        driver.setIsDocumentsUploaded(allPersonalDocumentsUploaded);
     }
 
+    /**
+     * Update document upload status for vehicle
+     */
+    private void updateVehicleDocumentUploadStatus(Vehicle vehicle) {
+        boolean allVehicleDocumentsUploaded = vehicle.getRevenueLicenseUrl() != null &&
+                vehicle.getVehicleRegistrationUrl() != null &&
+                vehicle.getVehicleInsuranceUrl() != null;
+        vehicle.setIsDocumentsUploaded(allVehicleDocumentsUploaded);
+    }
+
+    /**
+     * Build document upload response for driver documents
+     */
     private DocumentUploadResponse buildDocumentUploadResponse(Driver driver, DocumentType documentType,
                                                                String fileUrl, String extractedText) {
-        String message = determineResponseMessage(driver, documentType);
-        String nextStep = getNextStep(driver);
-        int progress = driver.getVerificationProgress();
-
-        DocumentUploadResponse.DocumentUploadResponseBuilder responseBuilder = DocumentUploadResponse.builder()
+        return DocumentUploadResponse.builder()
                 .driverId(driver.getDriverId())
                 .documentType(documentType)
                 .fileUrl(fileUrl)
                 .uploaded(true)
-                .message(message)
-                .verificationProgress(progress)
-                .nextStep(nextStep);
+                .message(determineResponseMessage(driver, documentType))
+                .verificationProgress(driver.getVerificationProgress())
+                .nextStep(getNextStep(driver))
+                .profileExtractionStatus(driver.getProfileExtractionStatus())
+                .faceVerificationStatus(driver.getFaceVerificationStatus())
+                .faceVerificationAttempts(driver.getFaceVerificationAttempts())
+                .extractedText(extractedText)
+                .build();
+    }
 
-        if (driver.getFaceMatchScore() != null) {
-            responseBuilder.faceMatchScore(driver.getFaceMatchScore());
-        }
-
-        if (driver.getFaceVerificationStatus() != null) {
-            responseBuilder.faceVerificationStatus(driver.getFaceVerificationStatus());
-        }
-
-        if (driver.getFaceVerificationAttempts() != null) {
-            responseBuilder.faceVerificationAttempts(driver.getFaceVerificationAttempts());
-        }
-
-        if (documentType == DocumentType.DRIVING_LICENSE) {
-            responseBuilder.profileExtractionStatus(driver.getProfileExtractionStatus());
-
-            if (driver.getUser() != null) {
-                responseBuilder.extractedFirstName(driver.getUser().getFirstName());
-                responseBuilder.extractedLastName(driver.getUser().getLastName());
-            }
-            if (driver.getLicenseNumber() != null) {
-                responseBuilder.extractedLicenseNumber(driver.getLicenseNumber());
-            }
-
-            if (extractedText != null) {
-                responseBuilder.extractedText(extractedText);
-            }
-        }
-
-        if (driver.getDocumentVerificationStatus() != null) {
-            responseBuilder.documentVerificationStatus(driver.getDocumentVerificationStatus());
-        }
-
-        return responseBuilder.build();
+    /**
+     * Build document upload response for vehicle documents
+     */
+    private DocumentUploadResponse buildVehicleDocumentUploadResponse(Driver driver, Vehicle vehicle,
+                                                                      DocumentType documentType, String fileUrl) {
+        return DocumentUploadResponse.builder()
+                .driverId(driver.getDriverId())
+                .documentType(documentType)
+                .fileUrl(fileUrl)
+                .uploaded(true)
+                .message("Vehicle document uploaded successfully")
+                .verificationProgress(vehicle.getVerificationProgress())
+                .nextStep(getVehicleNextStep(vehicle))
+                .build();
     }
 
     private String determineResponseMessage(Driver driver, DocumentType documentType) {
-        if (documentType == DocumentType.DRIVING_LICENSE) {
-            if ("IN_PROGRESS".equals(driver.getProfileExtractionStatus())) {
-                return "Document uploaded successfully! OCR processing in progress...";
-            } else if ("FAILED".equals(driver.getProfileExtractionStatus())) {
-                return "Document uploaded but OCR extraction failed. Please ensure image is clear.";
-            } else if ("COMPLETED".equals(driver.getProfileExtractionStatus())) {
-                return "Document uploaded and profile information extracted successfully!";
-            }
+        if (documentType == DocumentType.SELFIE) {
+            return "Selfie uploaded successfully";
+        } else if (documentType == DocumentType.DRIVING_LICENSE) {
+            return "Driving license uploaded - processing in background";
         }
-
-        if (driver.getFaceVerificationStatus() != null) {
-            if ("VERIFIED".equals(driver.getFaceVerificationStatus())) {
-                double score = driver.getFaceMatchScore() != null ? driver.getFaceMatchScore() : 0.0;
-                return String.format("Document uploaded and face verification passed! (Confidence: %.1f%%)", score * 100);
-            } else if ("FAILED".equals(driver.getFaceVerificationStatus())) {
-                double failScore = driver.getFaceMatchScore() != null ? driver.getFaceMatchScore() : 0.0;
-                return String.format("Document uploaded but face verification failed (Confidence: %.1f%% - at or below 50%% threshold). Please ensure clear photos.", failScore * 100);
-            } else if ("MANUAL_REVIEW".equals(driver.getFaceVerificationStatus())) {
-                double reviewScore = driver.getFaceMatchScore() != null ? driver.getFaceMatchScore() : 0.0;
-                return String.format("Document uploaded. Face verification under manual review (Confidence: %.1f%%).", reviewScore * 100);
-            } else if ("IN_PROGRESS".equals(driver.getFaceVerificationStatus())) {
-                return "Document uploaded. Face verification in progress...";
-            }
-        }
-
         return "Document uploaded successfully";
     }
 
@@ -586,9 +512,21 @@ public class DriverDocumentService {
         } else if ("FAILED".equals(driver.getFaceVerificationStatus())) {
             return "Face verification failed. Please re-upload clear selfie and driving license";
         } else if ("VERIFIED".equals(driver.getFaceVerificationStatus()) && driver.isFullyVerified()) {
-            return "Verification complete! You can now go online and start accepting rides";
+            return "All personal documents verified. Upload vehicle documents to complete verification.";
         } else {
-            return "Document verification in progress";
+            return "Continue with verification process";
+        }
+    }
+
+    private String getVehicleNextStep(Vehicle vehicle) {
+        if (!vehicle.getIsDocumentsUploaded()) {
+            return "Continue uploading remaining vehicle documents";
+        } else if ("PENDING".equals(vehicle.getVerificationStatus())) {
+            return "Vehicle document verification in progress";
+        } else if ("VERIFIED".equals(vehicle.getVerificationStatus())) {
+            return "Vehicle verification complete";
+        } else {
+            return "Continue with vehicle verification";
         }
     }
 
@@ -598,7 +536,7 @@ public class DriverDocumentService {
         }
 
         if (file.getSize() > 10 * 1024 * 1024) {
-            throw new CustomExceptions.InvalidFileException("File size exceeds 10MB limit");
+            throw new CustomExceptions.InvalidFileException("File size too large. Maximum 10MB allowed.");
         }
 
         String contentType = file.getContentType();

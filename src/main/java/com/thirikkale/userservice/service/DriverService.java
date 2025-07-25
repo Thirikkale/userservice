@@ -49,22 +49,6 @@ public class DriverService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd")
     };
 
-    //added lately
-    @Transactional
-    public DriverResponse updateDriverVehicleType(UUID driverId, VehicleTypeUpdateRequest request) {
-        log.info("Updating vehicle type for driver: {} to {}", driverId, request.getVehicleType());
-
-        Driver driver = driverRepository.findByIdWithUser(driverId)
-                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
-
-        // Update vehicle type
-        driver.setVehicleType(request.getVehicleType());
-
-        driver = driverRepository.save(driver);
-
-        log.info("Vehicle type updated successfully for driver: {}", driverId);
-        return mapToDriverResponse(driver);
-    }
 
     // NEW: Add the completeDriverProfileSetup method
     @Transactional
@@ -86,11 +70,11 @@ public class DriverService {
             driver.setWhatsappNumber(whatsappNumber.trim());
         }
 
-        // NEW: Set vehicle type
-        if (vehicleType != null) {
-            driver.setVehicleType(vehicleType);
-            log.info("Vehicle type set to: {}", vehicleType);
-        }
+        // // NEW: Set vehicle type
+        // if (vehicleType != null) {
+        //     driver.setVehicleType(vehicleType);
+        //     log.info("Vehicle type set to: {}", vehicleType);
+        // }
 
         // Save both entities
         userRepository.save(user);
@@ -412,6 +396,7 @@ public class DriverService {
 
     private DriverResponse mapToDriverResponse(Driver driver) {
         User user = driver.getUser();
+
         // Verify file existence for debugging
         if (driver.getSelfieUrl() != null) {
             boolean exists = fileStorageService.fileExists(driver.getSelfieUrl());
@@ -436,8 +421,8 @@ public class DriverService {
                 .verificationProgress(driver.getVerificationProgress())
                 .licenseNumber(driver.getLicenseNumber())
                 .licenseExpiry(driver.getLicenseExpiry())
-                .vehicleRegistration(driver.getVehicleRegistration())
-                .vehicleType(driver.getVehicleType()) // Vehicle type included
+                .vehicleRegistration(driver.getVehicleRegistration()) // From deprecated method
+                .vehicleType(driver.getPrimaryVehicle() != null ? driver.getPrimaryVehicle().getVehicleType() : null) // Fixed
                 .whatsappNumber(driver.getWhatsappNumber())
                 .totalEarnings(driver.getTotalEarnings())
                 .totalRidesCompleted(driver.getTotalRidesCompleted())
@@ -447,9 +432,9 @@ public class DriverService {
                 .createdAt(driver.getCreatedAt())
                 .selfieUrl(driver.getSelfieUrl())
                 .drivingLicenseUrl(driver.getDrivingLicenseUrl())
-                .revenueLicenseUrl(driver.getRevenueLicenseUrl())
-                .vehicleRegistrationUrl(driver.getVehicleRegistrationUrl())
-                .vehicleInsuranceUrl(driver.getVehicleInsuranceUrl())
+                .revenueLicenseUrl(driver.getRevenueLicenseUrl()) // From deprecated method
+                .vehicleRegistrationUrl(driver.getVehicleRegistrationUrl()) // From deprecated method
+                .vehicleInsuranceUrl(driver.getVehicleInsuranceUrl()) // From deprecated method
                 .faceMatchScore(driver.getFaceMatchScore())
                 .faceVerificationAttempts(driver.getFaceVerificationAttempts())
                 .build();

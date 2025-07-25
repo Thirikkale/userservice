@@ -28,6 +28,10 @@ public class Document {
     @Column(name = "driver_id", nullable = false)
     private UUID driverId;
 
+    // NEW: Vehicle ID for vehicle-specific documents
+    @Column(name = "vehicle_id")
+    private UUID vehicleId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "document_type", nullable = false)
     private DocumentType documentType;
@@ -61,4 +65,16 @@ public class Document {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    // Helper method to check if this is a personal document
+    public boolean isPersonalDocument() {
+        return documentType == DocumentType.SELFIE || documentType == DocumentType.DRIVING_LICENSE;
+    }
+
+    // Helper method to check if this is a vehicle document
+    public boolean isVehicleDocument() {
+        return documentType == DocumentType.REVENUE_LICENSE ||
+                documentType == DocumentType.VEHICLE_REGISTRATION ||
+                documentType == DocumentType.VEHICLE_INSURANCE;
+    }
 }

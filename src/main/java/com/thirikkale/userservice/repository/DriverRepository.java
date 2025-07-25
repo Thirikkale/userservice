@@ -14,7 +14,7 @@ import java.util.UUID;
 public interface DriverRepository extends JpaRepository<Driver, UUID> {
 
     // Add a specific query to check document URLs
-    @Query("SELECT d.selfieUrl, d.drivingLicenseUrl, d.revenueLicenseUrl, d.vehicleRegistrationUrl, d.vehicleInsuranceUrl FROM Driver d WHERE d.driverId = :driverId")
+    @Query("SELECT d.selfieUrl, d.drivingLicenseUrl FROM Driver d WHERE d.driverId = :driverId")
     Object[] findDocumentUrlsById(@Param("driverId") UUID driverId);
 
     @Query("SELECT d FROM Driver d JOIN FETCH d.user WHERE d.driverId = :driverId")
@@ -65,7 +65,4 @@ public interface DriverRepository extends JpaRepository<Driver, UUID> {
     long countDriversPendingManualReview();
 
     boolean existsByLicenseNumber(String licenseNumber);
-
-    boolean existsByVehicleRegistration(String vehicleRegistration);
-
 }
