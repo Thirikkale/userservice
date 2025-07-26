@@ -23,9 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -478,5 +476,103 @@ public class DriverService {
 
         log.info("Driver profile updated successfully: {}", driverId);
         return mapToDriverResponse(driver);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getDriverDocumentStatus(UUID driverId) {
+        log.info("Getting document status for driver: {}", driverId);
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        // Get vehicle counts from repository (avoids lazy loading issues)
+        long totalVehicles = driverRepository.countTotalVehiclesByDriverId(driverId);
+        long verifiedVehicles = driverRepository.countVerifiedVehiclesByDriverId(driverId);
+
+        // Calculate verification progress without accessing lazy collection
+        int verificationProgress = calculateVerificationProgress(driver, totalVehicles, verifiedVehicles);
+
+        Map<String, Object> status = new HashMap<>();
+        status.put("driverId", driverId);
+        status.put("isDocumentsUploaded", driver.getIsDocumentsUploaded());
+        status.put("faceVerificationStatus", driver.getFaceVerificationStatus());
+        status.put("documentVerificationStatus", driver.getDocumentVerificationStatus());
+        status.put("profileExtractionStatus", driver.getProfileExtractionStatus());
+        status.put("verificationProgress", verificationProgress);
+        status.put("totalVehicleCount", totalVehicles);
+        status.put("verifiedVehicleCount", verifiedVehicles);
+        status.put("hasAtLeastOneVerifiedVehicle", verifiedVehicles > 0);
+        status.put("canGoOnline", driver.getIsVerified() && verifiedVehicles > 0 && driver.getIsDocumentsUploaded());
+        status.put("nextStep", getNextRequiredAction(driver, totalVehicles, verifiedVehicles));
+
+        return status;
+    }
+
+    private int calculateVerificationProgress(Driver driver, long totalVehicles, long verifiedVehicles) {
+        int progress = 0;
+
+        // Basic profile (10%)
+        if (driver.getUser() != null && driver.getUser().getFirstName() != null && driver.getUser().getLastName() != null) {
+            progress += 10;
+        }
+
+        // Vehicle registration (10%)
+        if (totalVehicles > 0) {
+            progress += 10;
+        }
+
+        // Personal documents (30%)
+        if (driver.getIsDocumentsUploaded()) {
+            progress += 30;
+        }
+
+        // Profile extraction (20%)
+        if ("COMPLETED".equals(driver.getProfileExtractionStatus())) {
+            progress += 20;
+        }
+
+        // Face verification (20%)
+        if ("VERIFIED".equals(driver.getFaceVerificationStatus())) {
+            progress += 20;
+        }
+
+        // At least one verified vehicle (10%)
+        if (verifiedVehicles > 0) {
+            progress += 10;
+        }
+
+        return progress;
+    }
+
+    private String getNextRequiredAction(Driver driver, long totalVehicles, long verifiedVehicles) {
+        if (totalVehicles == 0) {
+            return "Register your first vehicle to continue";
+        }
+
+        if (!driver.getIsDocumentsUploaded()) {
+            return "Upload personal documents (selfie and driving license)";
+        }
+
+        if ("IN_PROGRESS".equals(driver.getProfileExtractionStatus())) {
+            return "Processing your driving license information...";
+        }
+
+        if ("IN_PROGRESS".equals(driver.getFaceVerificationStatus())) {
+            return "Face verification in progress...";
+        }
+
+        if ("FAILED".equals(driver.getFaceVerificationStatus())) {
+            return "Face verification failed - please re-upload clear photos";
+        }
+
+        if (verifiedVehicles == 0) {
+            return "Upload documents for at least one vehicle";
+        }
+
+        if (driver.getIsVerified() && verifiedVehicles > 0 && driver.getIsDocumentsUploaded()) {
+            return "All set! You can go online and start driving";
+        }
+
+        return "Complete verification process to start driving";
     }
 }

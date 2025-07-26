@@ -17,7 +17,6 @@ public class VehicleRegistrationRequest {
     @NotNull(message = "Vehicle type is required")
     private VehicleType vehicleType;
 
-    @NotBlank(message = "Vehicle registration number is required")
     private String vehicleRegistration;
 
     private String vehicleModel;

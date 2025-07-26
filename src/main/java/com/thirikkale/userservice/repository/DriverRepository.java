@@ -64,5 +64,16 @@ public interface DriverRepository extends JpaRepository<Driver, UUID> {
     @Query("SELECT COUNT(d) FROM Driver d WHERE d.faceVerificationStatus = 'MANUAL_REVIEW'")
     long countDriversPendingManualReview();
 
+    @Query("SELECT d FROM Driver d LEFT JOIN FETCH d.vehicles WHERE d.driverId = :driverId")
+    Optional<Driver> findByIdWithVehicles(@Param("driverId") UUID driverId);
+
+    // Add method to get verification counts
+    @Query("SELECT COUNT(v) FROM Vehicle v WHERE v.driver.driverId = :driverId AND v.isVerified = true AND v.isActive = true")
+    long countVerifiedVehiclesByDriverId(@Param("driverId") UUID driverId);
+
+    // Add method to get total vehicle count
+    @Query("SELECT COUNT(v) FROM Vehicle v WHERE v.driver.driverId = :driverId AND v.isActive = true")
+    long countTotalVehiclesByDriverId(@Param("driverId") UUID driverId);
+
     boolean existsByLicenseNumber(String licenseNumber);
 }

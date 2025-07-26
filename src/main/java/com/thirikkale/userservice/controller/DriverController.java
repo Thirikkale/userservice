@@ -25,10 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/v1/drivers")
@@ -46,27 +43,21 @@ public class DriverController {
     private final DriverRepository driverRepository;
 
     @PostMapping("/register")
-    @Operation(
-            summary = "Step 1: Register with Firebase Token",
-            description = "Initial registration with Firebase phone authentication token only. " +
-                    "Returns token and user ID for profile completion in next step."
-    )
+    @Operation(summary = "Step 1: Register with Firebase Token", description = "Initial registration with Firebase phone authentication token only. "
+            +
+            "Returns token and user ID for profile completion in next step.")
     public ResponseEntity<AuthResponse> registerDriver(@Valid @RequestBody DriverRegistrationRequest request) {
         log.info("Driver app token-only registration request received");
 
         AuthResponse response = multiRoleAuthService.registerUserWithFirebaseOnly(
                 request.getFirebaseIdToken(),
-                MultiRoleAuthService.AppType.DRIVER_APP
-        );
+                MultiRoleAuthService.AppType.DRIVER_APP);
 
         return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{driverId}/complete-profile")
-    @Operation(
-            summary = "Step 2: Complete Profile Setup",
-            description = "Complete driver profile with first name, last name, and optional WhatsApp number after token registration."
-    )
+    @Operation(summary = "Step 2: Complete Profile Setup", description = "Complete driver profile with first name, last name, and optional WhatsApp number after token registration.")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<AuthResponse> completeDriverProfile(
             @PathVariable UUID driverId,
@@ -78,8 +69,7 @@ public class DriverController {
                 request.getFirstName(),
                 request.getLastName(),
                 request.getWhatsappNumber(),
-                MultiRoleAuthService.AppType.DRIVER_APP
-        );
+                MultiRoleAuthService.AppType.DRIVER_APP);
 
         return ResponseEntity.ok(response);
     }
@@ -91,8 +81,7 @@ public class DriverController {
 
         AuthResponse response = multiRoleLoginService.loginForApp(
                 firebaseIdToken,
-                MultiRoleAuthService.AppType.DRIVER_APP
-        );
+                MultiRoleAuthService.AppType.DRIVER_APP);
 
         return ResponseEntity.ok(response);
     }
@@ -236,10 +225,7 @@ public class DriverController {
     }
 
     @PutMapping("/{driverId}/profile")
-    @Operation(
-            summary = "Update driver profile",
-            description = "Update driver profile information like name, date of birth, etc."
-    )
+    @Operation(summary = "Update driver profile", description = "Update driver profile information like name, date of birth, etc.")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DriverResponse> updateDriverProfile(
             @PathVariable UUID driverId,
@@ -281,27 +267,13 @@ public class DriverController {
     }
 
     @GetMapping("/{driverId}/documents/status")
-    @Operation(summary = "Get document upload status")
-    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(summary = "Get document status and verification progress")
+    @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT')")
     public ResponseEntity<Map<String, Object>> getDocumentStatus(@PathVariable UUID driverId) {
         log.info("Document status request for driver: {}", driverId);
 
-        Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
-
-        Map<String, Object> status = new HashMap<>();
-        status.put("driverId", driverId);
-        status.put("isDocumentsUploaded", driver.getIsDocumentsUploaded());
-
-        Map<String, Object> documents = new HashMap<>();
-        documents.put("selfie", createDocumentStatus("SELFIE", driver.getSelfieUrl()));
-        documents.put("drivingLicense", createDocumentStatus("DRIVING_LICENSE", driver.getDrivingLicenseUrl()));
-
-        status.put("documents", documents);
-        status.put("verificationProgress", driver.getVerificationProgress());
-        status.put("faceVerificationStatus", driver.getFaceVerificationStatus());
-        status.put("profileExtractionStatus", driver.getProfileExtractionStatus());
-
+        // Use service method instead of calling entity methods directly
+        Map<String, Object> status = driverService.getDriverDocumentStatus(driverId);
         return ResponseEntity.ok(status);
     }
 
@@ -315,9 +287,9 @@ public class DriverController {
 
     @GetMapping("/vehicle-types")
     @Operation(summary = "Get available vehicle types")
-    public ResponseEntity<VehicleType[]> getVehicleTypes() {
-        log.info("Get vehicle types request received");
-        return ResponseEntity.ok(VehicleType.values());
+    public ResponseEntity<List<VehicleType>> getVehicleTypes() {
+        List<VehicleType> vehicleTypes = Arrays.asList(VehicleType.values());
+        return ResponseEntity.ok(vehicleTypes);
     }
 
     // Add this endpoint after the vehicle management endpoints
