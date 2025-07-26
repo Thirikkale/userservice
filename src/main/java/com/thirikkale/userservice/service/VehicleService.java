@@ -1,6 +1,7 @@
 package com.thirikkale.userservice.service;
 
 import com.thirikkale.userservice.dto.request.VehicleRegistrationRequest;
+import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.VehicleResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Driver;
@@ -161,5 +162,70 @@ public class VehicleService {
                 .isPrimary(primaryVehicle != null && primaryVehicle.getVehicleId().equals(vehicle.getVehicleId()))
                 .createdAt(vehicle.getCreatedAt())
                 .build();
+    }
+
+    @Transactional
+    public VehicleResponse updateVehicleType(UUID driverId, UUID vehicleId, VehicleTypeUpdateRequest request) {
+        log.info("Updating vehicle type for vehicle {} of driver: {}", vehicleId, driverId);
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        Vehicle vehicle = vehicleRepository.findByDriverIdAndVehicleId(driverId, vehicleId)
+                .orElseThrow(() -> new CustomExceptions.VehicleNotFoundException("Vehicle not found"));
+
+        // Update vehicle type and related fields
+        vehicle.setVehicleType(request.getVehicleType());
+
+        if (request.getVehicleModel() != null) {
+            vehicle.setVehicleModel(request.getVehicleModel());
+        }
+        if (request.getVehicleYear() != null) {
+            vehicle.setVehicleYear(request.getVehicleYear());
+        }
+        if (request.getVehicleColor() != null) {
+            vehicle.setVehicleColor(request.getVehicleColor());
+        }
+
+        vehicle = vehicleRepository.save(vehicle);
+
+        log.info("Vehicle type updated successfully for vehicle: {} - new type: {}",
+                vehicleId, request.getVehicleType());
+
+        return mapToVehicleResponse(vehicle, driver.getPrimaryVehicle());
+    }
+
+    @Transactional
+    public VehicleResponse updatePrimaryVehicleType(UUID driverId, VehicleTypeUpdateRequest request) {
+        log.info("Updating primary vehicle type for driver: {}", driverId);
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        if (driver.getPrimaryVehicle() == null) {
+            throw new CustomExceptions.VehicleNotFoundException("No primary vehicle found for driver");
+        }
+
+        Vehicle primaryVehicle = driver.getPrimaryVehicle();
+
+        // Update vehicle type and related fields
+        primaryVehicle.setVehicleType(request.getVehicleType());
+
+        if (request.getVehicleModel() != null) {
+            primaryVehicle.setVehicleModel(request.getVehicleModel());
+        }
+        if (request.getVehicleYear() != null) {
+            primaryVehicle.setVehicleYear(request.getVehicleYear());
+        }
+        if (request.getVehicleColor() != null) {
+            primaryVehicle.setVehicleColor(request.getVehicleColor());
+        }
+
+        primaryVehicle = vehicleRepository.save(primaryVehicle);
+
+        log.info("Primary vehicle type updated successfully for driver: {} - new type: {}",
+                driverId, request.getVehicleType());
+
+        return mapToVehicleResponse(primaryVehicle, primaryVehicle);
     }
 }

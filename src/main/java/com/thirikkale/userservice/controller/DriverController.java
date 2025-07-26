@@ -319,4 +319,32 @@ public class DriverController {
         log.info("Get vehicle types request received");
         return ResponseEntity.ok(VehicleType.values());
     }
+
+    // Add this endpoint after the vehicle management endpoints
+    @PutMapping("/{driverId}/vehicles/{vehicleId}/vehicle-type")
+    @Operation(summary = "Update vehicle type for specific vehicle")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<VehicleResponse> updateVehicleType(
+            @PathVariable UUID driverId,
+            @PathVariable UUID vehicleId,
+            @Valid @RequestBody VehicleTypeUpdateRequest request) {
+        log.info("Update vehicle type request for vehicle {} of driver: {} - new type: {}",
+                vehicleId, driverId, request.getVehicleType());
+        VehicleResponse response = vehicleService.updateVehicleType(driverId, vehicleId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    // Alternative: Quick vehicle type update for primary vehicle
+    @PutMapping("/{driverId}/primary-vehicle/vehicle-type")
+    @Operation(summary = "Update vehicle type for primary vehicle")
+    @PreAuthorize("hasRole('DRIVER')")
+    public ResponseEntity<VehicleResponse> updatePrimaryVehicleType(
+            @PathVariable UUID driverId,
+            @Valid @RequestBody VehicleTypeUpdateRequest request) {
+        log.info("Update primary vehicle type request for driver: {} - new type: {}",
+                driverId, request.getVehicleType());
+        VehicleResponse response = vehicleService.updatePrimaryVehicleType(driverId, request);
+        return ResponseEntity.ok(response);
+    }
+
 }
