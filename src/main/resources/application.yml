@@ -18,8 +18,10 @@ spring:
     name: user-service
   datasource:
     url: jdbc:postgresql://localhost:5432/thirikkale_user_db
+#    url: jdbc:postgresql://db.msdvednfirlpmwkrmtnf.supabase.co:5432/postgres
     username: postgres
     password: 1111
+#    password: ASy9UfjqSX2/-eu
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-timeout: 5000         # Reduced to 5 seconds
