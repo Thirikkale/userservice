@@ -31,7 +31,7 @@ public class Vehicle {
     @Column(name = "vehicle_type", nullable = false)
     private VehicleType vehicleType;
 
-    @Column(name = "vehicle_registration", unique = true)
+    @Column(name = "vehicle_registration", unique = true, nullable = true)
     private String vehicleRegistration;
 
     @Column(name = "vehicle_model")
