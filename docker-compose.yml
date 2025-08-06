@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  userservice:
+    build: ./userservice
+    ports:
+      - "8080:8080"
+    depends_on:
+      - fastapi-ai
+    environment:
+      - FASTAPI_AI_URL=http://fastapi-ai:8001
+    networks:
+      - thirikkale
+
+  fastapi-ai:
+    build: ./userservice/python_scripts
+    ports:
+      - "8001:8001"
+    environment:
+      - USE_MOCK_AI=false
+    networks:
+      - thirikkale
+
+networks:
+  thirikkale:
+    driver: bridge
