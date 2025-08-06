@@ -1,64 +1,66 @@
-# Multi-stage build for smaller final image
-FROM openjdk:17-jdk-slim as builder
+# Use specific version for reproducibility
+FROM maven:3.9.5-eclipse-temurin-17-alpine AS builder
 
 WORKDIR /app
 
-# Install Maven
-RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
-
-# Copy pom.xml first for better Docker layer caching
+# Copy pom.xml first for better caching
 COPY pom.xml .
 
-# Download dependencies (this layer will be cached if pom.xml doesn't change)
+# Download dependencies
 RUN mvn dependency:go-offline -B
 
-# Copy source code
+# Copy source and build
 COPY src ./src
-
-# Build the application
 RUN mvn clean package -DskipTests
 
-# Production stage
-FROM openjdk:17-jdk-slim
+# Runtime stage with minimal image - ✅ FIXED: Use Eclipse Temurin
+FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Install Python and required packages for your AI services
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv && \
-    rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies in one layer
+RUN apk update && \
+    apk add --no-cache \
+    python3 \
+    py3-pip \
+    curl \
+    bash \
+    gcompat \
+    libstdc++ \
+    && rm -rf /var/cache/apk/*
 
-# Create Python virtual environment
+# Setup Python environment
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy Python scripts and install dependencies
-COPY python_scripts/ ./python_scripts/
-RUN if [ -f python_scripts/requirements.txt ]; then \
-        pip install --no-cache-dir -r python_scripts/requirements.txt; \
-    else \
-        pip install --no-cache-dir fastapi uvicorn opencv-python pillow numpy tensorflow easyocr face-recognition; \
-    fi
+# Copy and install Python dependencies
+COPY python_scripts/requirements.txt ./python_scripts/
+RUN pip install --no-cache-dir -r python_scripts/requirements.txt
 
-# Copy the built jar from builder stage
+# Copy Python scripts
+COPY python_scripts/ ./python_scripts/
+
+# Copy jar from build stage
 COPY --from=builder /app/target/*.jar app.jar
 
-# Create uploads directory
-RUN mkdir -p uploads/driver-documents uploads/selfies uploads/temp
+# Create necessary directories
+RUN mkdir -p uploads/{driver-documents,selfies,temp,vehicle-documents}
 
-# Create non-root user for security
-RUN addgroup --system spring && adduser --system spring --ingroup spring
+# Security: Create non-root user
+RUN addgroup -g 1001 spring && adduser -D -u 1001 -G spring spring
 RUN chown -R spring:spring /app
 USER spring
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8081/user-service/api/v1/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -f http://localhost:8081/actuator/health || exit 1
 
 EXPOSE 8081
 
-# Use environment variables for configuration
+# Environment variables
 ENV SPRING_PROFILES_ACTIVE=docker
-ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV JAVA_OPTS="-Xmx1g -Xms512m -XX:+UseG1GC"
+ENV PYTHONPATH="/app/python_scripts"
 
+# Run application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
