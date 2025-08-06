@@ -1,5 +1,5 @@
 # Use specific version for reproducibility
-FROM maven:3.9.5-eclipse-temurin-17-alpine AS builder
+FROM maven:3.9.5-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
@@ -13,25 +13,51 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Runtime stage with minimal image - ✅ FIXED: Use Eclipse Temurin
-FROM eclipse-temurin:17-jre-alpine
+# Runtime stage with Ubuntu base - ✅ FIXED: Use Ubuntu instead of Alpine
+FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# Install runtime dependencies in one layer
-RUN apk update && \
-    apk add --no-cache \
-    python3 \
-    py3-pip \
-    curl \
-    bash \
-    gcompat \
-    libstdc++ \
-    && rm -rf /var/cache/apk/*
+# Install system dependencies for Python packages
+RUN apt-get update && \
+    apt-get install -y \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        build-essential \
+        curl \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
+        libgomp1 \
+        libgstreamer1.0-0 \
+        cmake \
+        pkg-config \
+        libhdf5-dev \
+        libopenblas-dev \
+        liblapack-dev \
+        libatlas-base-dev \
+        gfortran \
+        libjpeg-dev \
+        libpng-dev \
+        libtiff-dev \
+        libavcodec-dev \
+        libavformat-dev \
+        libswscale-dev \
+        libv4l-dev \
+        libxvidcore-dev \
+        libx264-dev \
+        && rm -rf /var/lib/apt/lists/*
 
 # Setup Python environment
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install wheel
+RUN pip install --upgrade pip setuptools wheel
 
 # Copy and install Python dependencies
 COPY python_scripts/requirements.txt ./python_scripts/
@@ -47,7 +73,7 @@ COPY --from=builder /app/target/*.jar app.jar
 RUN mkdir -p uploads/{driver-documents,selfies,temp,vehicle-documents}
 
 # Security: Create non-root user
-RUN addgroup -g 1001 spring && adduser -D -u 1001 -G spring spring
+RUN groupadd -r spring && useradd -r -g spring spring
 RUN chown -R spring:spring /app
 USER spring
 
