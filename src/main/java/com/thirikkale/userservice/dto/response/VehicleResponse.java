@@ -17,7 +17,9 @@ import java.util.UUID;
 public class VehicleResponse {
 
     private UUID vehicleId;
+    private String readableId; // Human-readable ID (e.g., V00001, V00002)
     private UUID driverId;
+    private String driverReadableId; // Driver's readable ID (e.g., D00001)
     private VehicleType vehicleType;
     private String vehicleRegistration;
     private String vehicleModel;

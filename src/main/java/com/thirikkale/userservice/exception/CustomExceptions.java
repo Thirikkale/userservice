@@ -106,4 +106,23 @@ public class CustomExceptions {
             super(message);
         }
     }
+
+    // Admin-specific exceptions
+    public static class AccountLockedException extends RuntimeException {
+        public AccountLockedException(String message) {
+            super(message);
+        }
+    }
+
+    public static class AccountDeactivatedException extends RuntimeException {
+        public AccountDeactivatedException(String message) {
+            super(message);
+        }
+    }
+
+    public static class ResourceNotFoundException extends RuntimeException {
+        public ResourceNotFoundException(String message) {
+            super(message);
+        }
+    }
 }

@@ -3,6 +3,7 @@ package com.thirikkale.userservice.service;
 import com.thirikkale.userservice.dto.request.VehicleRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.VehicleResponse;
+import com.thirikkale.userservice.dto.response.AdminVehicleResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Driver;
 import com.thirikkale.userservice.model.Vehicle;
@@ -140,7 +141,9 @@ public class VehicleService {
     private VehicleResponse mapToVehicleResponse(Vehicle vehicle, Vehicle primaryVehicle) {
         return VehicleResponse.builder()
                 .vehicleId(vehicle.getVehicleId())
+                .readableId(vehicle.getReadableId()) // V00001
                 .driverId(vehicle.getDriver().getDriverId())
+                .driverReadableId(vehicle.getDriver().getReadableId()) // D00001
                 .vehicleType(vehicle.getVehicleType())
                 .vehicleRegistration(vehicle.getVehicleRegistration())
                 .vehicleModel(vehicle.getVehicleModel())
@@ -227,5 +230,167 @@ public class VehicleService {
                 driverId, request.getVehicleType());
 
         return mapToVehicleResponse(primaryVehicle, primaryVehicle);
+    }
+
+    // ==================== Admin Vehicle Management ====================
+
+    /**
+     * Get all vehicles (Admin only)
+     */
+    @Transactional(readOnly = true)
+    public List<AdminVehicleResponse> getAllVehicles() {
+        log.info("Admin: Fetching all vehicles");
+        List<Vehicle> vehicles = vehicleRepository.findAllWithDriver();
+        return vehicles.stream()
+                .map(vehicle -> mapToAdminVehicleResponse(vehicle))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get vehicle by ID for admin (no driver validation)
+     */
+    @Transactional(readOnly = true)
+    public AdminVehicleResponse getVehicleByIdAdmin(UUID vehicleId) {
+        log.info("Admin: Fetching vehicle by ID: {}", vehicleId);
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new CustomExceptions.VehicleNotFoundException("Vehicle not found"));
+        return mapToAdminVehicleResponse(vehicle);
+    }
+
+    /**
+     * Update vehicle document verification status
+     */
+    @Transactional
+    public AdminVehicleResponse updateDocumentStatus(UUID vehicleId, String documentType, String status) {
+        log.info("Admin: Updating vehicle document status: {}, type: {}, status: {}",
+                vehicleId, documentType, status);
+
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new CustomExceptions.VehicleNotFoundException("Vehicle not found"));
+
+        switch (documentType.toLowerCase()) {
+            case "revenuelicense":
+                vehicle.setRevenueLicenseVerificationStatus(status);
+                break;
+            case "vehicleregistration":
+                vehicle.setVehicleRegistrationVerificationStatus(status);
+                break;
+            case "vehicleinsurance":
+                vehicle.setVehicleInsuranceVerificationStatus(status);
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown document type: " + documentType);
+        }
+
+        // Update overall verification progress
+        updateVerificationProgress(vehicle);
+
+        vehicleRepository.save(vehicle);
+        log.info("Document status updated successfully for vehicle: {}", vehicleId);
+
+        return mapToAdminVehicleResponse(vehicle);
+    }
+
+    /**
+     * Helper method to map Vehicle to AdminVehicleResponse with driver name
+     */
+    private AdminVehicleResponse mapToAdminVehicleResponse(Vehicle vehicle) {
+        String driverName = "Unknown";
+        String driverReadableId = null;
+        if (vehicle.getDriver() != null && vehicle.getDriver().getUser() != null) {
+            driverName = vehicle.getDriver().getUser().getFirstName() + " " +
+                    vehicle.getDriver().getUser().getLastName();
+            driverReadableId = vehicle.getDriver().getReadableId(); // D00001
+        }
+
+        return AdminVehicleResponse.builder()
+                .vehicleId(vehicle.getVehicleId().toString())
+                .readableId(vehicle.getReadableId()) // V00001
+                .driverId(vehicle.getDriver() != null ? vehicle.getDriver().getDriverId().toString() : null)
+                .driverReadableId(driverReadableId) // D00001
+                .driverName(driverName)
+                .vehicleType(vehicle.getVehicleType() != null ? vehicle.getVehicleType().name() : null)
+                .vehicleRegistration(vehicle.getVehicleRegistration())
+                .vehicleModel(vehicle.getVehicleModel())
+                .vehicleYear(vehicle.getVehicleYear())
+                .vehicleColor(vehicle.getVehicleColor())
+                .vehicleMake(vehicle.getVehicleMake())
+                .isActive(vehicle.getIsActive())
+                .isVerified(vehicle.getIsVerified())
+                .isDocumentsUploaded(vehicle.getIsDocumentsUploaded())
+                .verificationStatus(vehicle.getVerificationStatus())
+                .revenueLicenseUrl(vehicle.getRevenueLicenseUrl())
+                .vehicleRegistrationUrl(vehicle.getVehicleRegistrationUrl())
+                .vehicleInsuranceUrl(vehicle.getVehicleInsuranceUrl())
+                .revenueLicenseVerificationStatus(vehicle.getRevenueLicenseVerificationStatus())
+                .vehicleRegistrationVerificationStatus(vehicle.getVehicleRegistrationVerificationStatus())
+                .vehicleInsuranceVerificationStatus(vehicle.getVehicleInsuranceVerificationStatus())
+                .insuranceCompany(vehicle.getInsuranceCompany())
+                .insurancePolicyNumber(vehicle.getInsurancePolicyNumber())
+                .insuranceExpiry(vehicle.getInsuranceExpiry() != null ? vehicle.getInsuranceExpiry().toString() : null)
+                .revenueLicenseExpiry(
+                        vehicle.getRevenueLicenseExpiry() != null ? vehicle.getRevenueLicenseExpiry().toString() : null)
+                .createdAt(vehicle.getCreatedAt() != null ? vehicle.getCreatedAt().toString() : null)
+                .build();
+    }
+
+    /**
+     * Helper method to map Vehicle to VehicleResponse with driver name (deprecated
+     * - keeping for backward compatibility)
+     */
+    @Deprecated
+    private VehicleResponse mapToVehicleResponseWithDriverName(Vehicle vehicle) {
+        return VehicleResponse.builder()
+                .vehicleId(vehicle.getVehicleId())
+                .readableId(vehicle.getReadableId()) // V00001
+                .driverId(vehicle.getDriver().getDriverId())
+                .driverReadableId(vehicle.getDriver().getReadableId()) // D00001
+                .vehicleType(vehicle.getVehicleType())
+                .vehicleRegistration(vehicle.getVehicleRegistration())
+                .vehicleModel(vehicle.getVehicleModel())
+                .vehicleYear(vehicle.getVehicleYear())
+                .vehicleColor(vehicle.getVehicleColor())
+                .vehicleMake(vehicle.getVehicleMake())
+                .isActive(vehicle.getIsActive())
+                .isVerified(vehicle.getIsVerified())
+                .isDocumentsUploaded(vehicle.getIsDocumentsUploaded())
+                .verificationStatus(vehicle.getVerificationStatus())
+                .verificationProgress(vehicle.getVerificationProgress())
+                .revenueLicenseUrl(vehicle.getRevenueLicenseUrl())
+                .vehicleRegistrationUrl(vehicle.getVehicleRegistrationUrl())
+                .vehicleInsuranceUrl(vehicle.getVehicleInsuranceUrl())
+                .insuranceCompany(vehicle.getInsuranceCompany())
+                .insurancePolicyNumber(vehicle.getInsurancePolicyNumber())
+                .insuranceExpiry(vehicle.getInsuranceExpiry())
+                .revenueLicenseExpiry(vehicle.getRevenueLicenseExpiry())
+                .isPrimary(vehicle.getDriver().getPrimaryVehicle() != null &&
+                        vehicle.getDriver().getPrimaryVehicle().getVehicleId().equals(vehicle.getVehicleId()))
+                .createdAt(vehicle.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Update verification progress based on document statuses
+     */
+    private void updateVerificationProgress(Vehicle vehicle) {
+        int totalDocs = 3;
+        int approvedDocs = 0;
+
+        if ("APPROVED".equals(vehicle.getRevenueLicenseVerificationStatus()))
+            approvedDocs++;
+        if ("APPROVED".equals(vehicle.getVehicleRegistrationVerificationStatus()))
+            approvedDocs++;
+        if ("APPROVED".equals(vehicle.getVehicleInsuranceVerificationStatus()))
+            approvedDocs++;
+
+        int progress = (approvedDocs * 100) / totalDocs;
+
+        // Update overall verification status
+        if (progress == 100) {
+            vehicle.setIsVerified(true);
+            vehicle.setVerificationStatus("VERIFIED");
+        } else if (approvedDocs > 0) {
+            vehicle.setVerificationStatus("PENDING");
+        }
     }
 }

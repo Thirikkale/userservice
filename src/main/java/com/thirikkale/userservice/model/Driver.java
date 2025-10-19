@@ -25,6 +25,9 @@ public class Driver {
     @Column(name = "driver_id")
     private UUID driverId;
 
+    @Column(name = "readable_id", unique = true, length = 20)
+    private String readableId; // Human-readable ID (e.g., D00001, D00002)
+
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.REFRESH)
     @JoinColumn(name = "driver_id", referencedColumnName = "user_id")
     private User user;
@@ -35,6 +38,15 @@ public class Driver {
 
     @Column(name = "driving_license_url")
     private String drivingLicenseUrl;
+
+    // Individual document verification statuses for driver documents
+    @Column(name = "selfie_verification_status")
+    @Builder.Default
+    private String selfieVerificationStatus = "PENDING";
+
+    @Column(name = "driving_license_verification_status")
+    @Builder.Default
+    private String drivingLicenseVerificationStatus = "PENDING";
 
     // Driver status
     @Column(name = "is_available")
@@ -157,12 +169,16 @@ public class Driver {
         int progress = 0;
 
         // Personal documents progress (60% of total)
-        if (isDocumentsUploaded) progress += 30;
-        if ("COMPLETED".equals(profileExtractionStatus)) progress += 15;
-        if ("VERIFIED".equals(faceVerificationStatus)) progress += 15;
+        if (isDocumentsUploaded)
+            progress += 30;
+        if ("COMPLETED".equals(profileExtractionStatus))
+            progress += 15;
+        if ("VERIFIED".equals(faceVerificationStatus))
+            progress += 15;
 
         // Vehicle documents progress (40% of total)
-        if (hasAtLeastOneVerifiedVehicle()) progress += 40;
+        if (hasAtLeastOneVerifiedVehicle())
+            progress += 40;
 
         return progress;
     }
@@ -195,6 +211,5 @@ public class Driver {
     public String getVehicleRegistration() {
         return primaryVehicle != null ? primaryVehicle.getVehicleRegistration() : null;
     }
-
 
 }

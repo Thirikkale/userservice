@@ -20,6 +20,9 @@ public class Rider {
     @Column(name = "rider_id")
     private UUID riderId; // TPT: This will be set manually to match User's userId
 
+    @Column(name = "readable_id", unique = true, length = 20)
+    private String readableId; // Human-readable ID (e.g., R00001, R00002)
+
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.REFRESH)
     @JoinColumn(name = "rider_id", referencedColumnName = "user_id")
     private User user;

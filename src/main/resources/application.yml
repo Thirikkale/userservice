@@ -66,8 +66,32 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:thirikkaleride@gmail.com}
+    password: ${MAIL_PASSWORD:rhap etyb unag qptz}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
   security:
     require-ssl: false
+
+# Application Configuration
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8081/user-service}
+
+# Security configuration for internal service-to-service communication
+security:
+  internal-service-key: thirikkale-internal-secret-2025
 
 jwt:
   secret: 75533e39c1be679894fc643f6419eef8ce5a90c2042ab40e5504821271567472
@@ -81,7 +105,7 @@ firebase:
 
 file:
   upload:
-    dir: uploads/
+    dir: d:/UCSC/3rd Year/IS3113 Group Project II/uploads/
     max-size: 10485760 # 10MB
 
 otp:

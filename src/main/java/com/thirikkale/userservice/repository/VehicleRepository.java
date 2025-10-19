@@ -26,7 +26,8 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
     boolean existsByVehicleRegistration(String vehicleRegistration);
 
     @Query("SELECT v FROM Vehicle v WHERE v.driver.driverId = :driverId AND v.vehicleType = :vehicleType AND v.isActive = true")
-    List<Vehicle> findByDriverIdAndVehicleType(@Param("driverId") UUID driverId, @Param("vehicleType") VehicleType vehicleType);
+    List<Vehicle> findByDriverIdAndVehicleType(@Param("driverId") UUID driverId,
+            @Param("vehicleType") VehicleType vehicleType);
 
     @Query("SELECT v FROM Vehicle v WHERE v.isVerified = true AND v.isActive = true")
     List<Vehicle> findAllVerifiedVehicles();
@@ -39,4 +40,9 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
 
     @Query("SELECT COUNT(v) FROM Vehicle v WHERE v.driver.driverId = :driverId AND v.isVerified = true AND v.isActive = true")
     long countVerifiedVehiclesByDriver(@Param("driverId") UUID driverId);
+
+    // Fetch all vehicles with driver and user data (JOIN FETCH to avoid lazy
+    // loading issues)
+    @Query("SELECT v FROM Vehicle v LEFT JOIN FETCH v.driver d LEFT JOIN FETCH d.user")
+    java.util.List<Vehicle> findAllWithDriver();
 }

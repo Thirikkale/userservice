@@ -23,6 +23,9 @@ public class Vehicle {
     @Column(name = "vehicle_id")
     private UUID vehicleId;
 
+    @Column(name = "readable_id", unique = true, length = 20)
+    private String readableId; // Human-readable ID (e.g., V00001, V00002)
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", referencedColumnName = "driver_id")
     private Driver driver;
@@ -73,6 +76,19 @@ public class Vehicle {
     @Column(name = "vehicle_insurance_url")
     private String vehicleInsuranceUrl;
 
+    // Individual document verification statuses for vehicle documents
+    @Column(name = "revenue_license_verification_status")
+    @Builder.Default
+    private String revenueLicenseVerificationStatus = "PENDING";
+
+    @Column(name = "vehicle_registration_verification_status")
+    @Builder.Default
+    private String vehicleRegistrationVerificationStatus = "PENDING";
+
+    @Column(name = "vehicle_insurance_verification_status")
+    @Builder.Default
+    private String vehicleInsuranceVerificationStatus = "PENDING";
+
     // Insurance details
     @Column(name = "insurance_company")
     private String insuranceCompany;
@@ -115,9 +131,12 @@ public class Vehicle {
 
     public int getVerificationProgress() {
         int progress = 0;
-        if (revenueLicenseUrl != null) progress += 33;
-        if (vehicleRegistrationUrl != null) progress += 33;
-        if (vehicleInsuranceUrl != null) progress += 34;
+        if (revenueLicenseUrl != null)
+            progress += 33;
+        if (vehicleRegistrationUrl != null)
+            progress += 33;
+        if (vehicleInsuranceUrl != null)
+            progress += 34;
         return progress;
     }
 }

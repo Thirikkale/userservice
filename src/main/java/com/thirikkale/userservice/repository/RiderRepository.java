@@ -33,4 +33,8 @@ public interface RiderRepository extends JpaRepository<Rider, UUID> {
 
     @Query("SELECT COUNT(r) FROM Rider r WHERE r.womenOnlyAccess = true")
     long countWomenOnlyAccessRiders();
+
+    // Fetch all riders with user data (JOIN FETCH to avoid lazy loading issues)
+    @Query("SELECT r FROM Rider r JOIN FETCH r.user")
+    java.util.List<Rider> findAllWithUsers();
 }

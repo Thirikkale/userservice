@@ -18,6 +18,7 @@ import java.util.UUID;
 public class DriverResponse {
 
     private UUID driverId;
+    private String readableId; // Human-readable ID (e.g., D00001, D00002)
     private String firstName;
     private String lastName;
     private String phoneNumber;
@@ -51,6 +52,13 @@ public class DriverResponse {
     private String revenueLicenseUrl;
     private String vehicleRegistrationUrl;
     private String vehicleInsuranceUrl;
+
+    // Individual document verification statuses
+    private String selfieVerificationStatus; // PENDING, APPROVED, REJECTED, RESUBMISSION_REQUIRED
+    private String drivingLicenseVerificationStatus; // PENDING, APPROVED, REJECTED, RESUBMISSION_REQUIRED
+    private String revenueLicenseVerificationStatus; // PENDING, APPROVED, REJECTED, RESUBMISSION_REQUIRED
+    private String vehicleRegistrationVerificationStatus; // PENDING, APPROVED, REJECTED, RESUBMISSION_REQUIRED
+    private String vehicleInsuranceVerificationStatus; // PENDING, APPROVED, REJECTED, RESUBMISSION_REQUIRED
 
     // Face verification details
     private Double faceMatchScore;
