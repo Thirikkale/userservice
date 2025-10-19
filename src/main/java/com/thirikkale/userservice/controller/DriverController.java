@@ -7,6 +7,7 @@ import com.thirikkale.userservice.dto.request.VehicleRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
+import com.thirikkale.userservice.dto.response.DriverCardResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
 import com.thirikkale.userservice.dto.response.VehicleResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
@@ -319,4 +320,24 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{driverId}/card")
+    @Operation(summary = "Get driver card details", description = "Public endpoint to get driver name, contact number, and profile picture for display in cards")
+    public ResponseEntity<DriverCardResponse> getDriverCard(@PathVariable UUID driverId) {
+        log.info("Get driver card details for driver: {}", driverId);
+
+        Driver driver = driverRepository.findByIdWithUser(driverId)
+                .orElseThrow(() -> new CustomExceptions.ResourceNotFoundException("Driver not found"));
+
+        String name = driver.getUser().getFirstName() + " " + driver.getUser().getLastName();
+        String contactNumber = driver.getUser().getPhoneNumber();
+        String profilePicUrl = driver.getSelfieUrl();
+
+        DriverCardResponse response = DriverCardResponse.builder()
+                .name(name)
+                .contactNumber(contactNumber)
+                .profilePicUrl(profilePicUrl)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
 }

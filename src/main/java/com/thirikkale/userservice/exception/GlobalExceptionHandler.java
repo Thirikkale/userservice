@@ -43,6 +43,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
+    @ExceptionHandler(CustomExceptions.ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(CustomExceptions.ResourceNotFoundException ex) {
+        log.error("Resource not found: {}", ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error("Resource Not Found")
+                .message(ex.getMessage())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
     @ExceptionHandler(CustomExceptions.InvalidTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidToken(CustomExceptions.InvalidTokenException ex) {
         log.error("Invalid token: {}", ex.getMessage());

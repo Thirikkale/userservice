@@ -57,6 +57,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/health", "/info").permitAll()
 
+                        // Public driver card endpoint
+                        .requestMatchers("/api/v1/drivers/*/card").permitAll()
+
                         // Error handling
                         .requestMatchers("/error").permitAll()
 

@@ -106,4 +106,10 @@ public class CustomExceptions {
             super(message);
         }
     }
+
+    public static class ResourceNotFoundException extends RuntimeException {
+        public ResourceNotFoundException(String message) {
+            super(message);
+        }
+    }
 }
