@@ -32,6 +32,15 @@ public class VehicleService {
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
 
+        // FIXED: Only check for duplicate registration if registration number is provided
+        if (request.getVehicleRegistration() != null &&
+                !request.getVehicleRegistration().trim().isEmpty()) {
+            if (vehicleRepository.existsByVehicleRegistration(request.getVehicleRegistration())) {
+                throw new CustomExceptions.VehicleAlreadyExistsException("Vehicle with registration " +
+                        request.getVehicleRegistration() + " already exists");
+            }
+        }
+
         // Check if vehicle registration already exists
         if (vehicleRepository.existsByVehicleRegistration(request.getVehicleRegistration())) {
             throw new CustomExceptions.VehicleAlreadyExistsException("Vehicle with registration " +
