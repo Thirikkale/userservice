@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - Thirikkale Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Animated background circles */
+        body::before {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            top: -200px;
+            right: -100px;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            bottom: -150px;
+            left: -50px;
+            animation: float 8s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+            }
+            50% {
+                transform: translateY(-20px) scale(1.05);
+            }
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+            width: 90%;
+            max-width: 500px;
+            max-height: 95vh;
+            position: relative;
+            z-index: 1;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 30px 25px;
+            text-align: center;
+            border-radius: 16px 16px 0 0;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #60a5fa, #93c5fd, #60a5fa);
+            background-size: 200% 100%;
+            animation: shimmer 2s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 15px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        .header h1 {
+            font-size: 26px;
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.95;
+            font-weight: 400;
+        }
+
+        .content {
+            padding: 25px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .message-box {
+            text-align: center;
+        }
+
+        .checkmark {
+            width: 70px;
+            height: 70px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            display: block;
+            stroke-width: 3;
+            stroke: #1e40af;
+            stroke-miterlimit: 10;
+            animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+        }
+
+        .checkmark__circle {
+            stroke-dasharray: 166;
+            stroke-dashoffset: 166;
+            stroke-width: 3;
+            stroke-miterlimit: 10;
+            stroke: #3b82f6;
+            fill: none;
+            animation: stroke .6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+        }
+
+        .checkmark__check {
+            transform-origin: 50% 50%;
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            animation: stroke .3s cubic-bezier(0.65, 0, 0.45, 1) .8s forwards;
+        }
+
+        @keyframes stroke {
+            100% { stroke-dashoffset: 0; }
+        }
+
+        @keyframes scale {
+            0%, 100% { transform: none; }
+            50% { transform: scale3d(1.1, 1.1, 1); }
+        }
+
+        @keyframes fill {
+            100% { box-shadow: inset 0px 0px 0px 30px #dbeafe; }
+        }
+
+        .error-icon {
+            width: 70px;
+            height: 70px;
+            margin: 0 auto 20px;
+            background: #fee2e2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .message-box h2 {
+            font-size: 22px;
+            margin-bottom: 10px;
+            color: #1e293b;
+        }
+
+        .success h2 {
+            color: #1e40af;
+        }
+
+        .error h2 {
+            color: #dc2626;
+        }
+
+        .message-box p {
+            color: #475569;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+
+        .error-reasons {
+            margin-top: 12px;
+            text-align: left;
+            background: #fef2f2;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border-left: 3px solid #ef4444;
+        }
+
+        .error-reasons strong {
+            display: block;
+            margin-bottom: 6px;
+            color: #991b1b;
+            font-size: 13px;
+        }
+
+        .error-reasons ul {
+            margin-left: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #7f1d1d;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-radius: 10px;
+            padding: 18px;
+            margin: 20px 0;
+            border: 1px solid #bfdbfe;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            gap: 10px;
+        }
+
+        .info-row:not(:last-child) {
+            border-bottom: 1px solid #bfdbfe;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #1e40af;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .info-value {
+            color: #1e293b;
+            font-size: 14px;
+            text-align: right;
+            word-break: break-word;
+        }
+
+        .status-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 12px;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+
+        .button-container {
+            margin-top: 20px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(30, 64, 175, 0.3);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(30, 64, 175, 0.4);
+            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            background: #f8fafc;
+            padding: 15px;
+            text-align: center;
+            border-radius: 0 0 16px 16px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .footer p {
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .footer p:first-child {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        /* Responsive adjustments */
+        @media (max-height: 700px) {
+            .container {
+                max-height: 98vh;
+            }
+            .header {
+                padding: 20px 25px;
+            }
+            .logo {
+                width: 50px;
+                height: 50px;
+                font-size: 28px;
+            }
+            .header h1 {
+                font-size: 22px;
+            }
+            .content {
+                padding: 20px;
+            }
+            .checkmark, .error-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 35px;
+            }
+            .message-box h2 {
+                font-size: 20px;
+            }
+            .info-card {
+                padding: 15px;
+                margin: 15px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo" th:text="${success} ? '🚗' : '⚠️'">🚗</div>
+            <h1>Thirikkale</h1>
+            <p th:text="${success} ? 'Email Verification' : 'Verification Failed'">Email Verification</p>
+        </div>
+
+        <div class="content">
+            <div class="message-box" th:classappend="${success} ? 'success' : 'error'">
+                <div th:if="${success}">
+                    <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+                        <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                    </svg>
+                    <h2>Email Verified Successfully!</h2>
+                    <p th:text="${message}">Your email has been verified and your account is now activated!</p>
+                </div>
+
+                <div th:if="${!success}">
+                    <div class="error-icon">❌</div>
+                    <h2>Verification Failed</h2>
+                    <p th:text="${message}">The verification link is invalid or has expired.</p>
+                    <div class="error-reasons">
+                        <strong>Common reasons:</strong>
+                        <ul>
+                            <li>Link expired (valid for 24 hours)</li>
+                            <li>Email already verified</li>
+                            <li>Link already used</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div th:if="${success}" class="info-card">
+                    <div class="info-row">
+                        <span class="info-label">👤 Name</span>
+                        <span class="info-value" th:text="${adminName}">Admin Name</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">📧 Email</span>
+                        <span class="info-value" th:text="${email}">admin@thirikkale.lk</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status</span>
+                        <span class="status-badge">ACTIVATED</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-container">
+                <a th:if="${success}" href="http://localhost:3000/login" class="btn">
+                    🚀 Go to Login
+                </a>
+                <a th:if="${!success}" href="http://localhost:3000/auth/resend-verification" class="btn">
+                    📧 Resend Verification Email
+                </a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>© 2025 Thirikkale. All rights reserved.</p>
+            <p>Need help? Contact support@thirikkale.lk</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -266,6 +266,19 @@ public class DriverController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{driverId}/documents/{documentType}/status")
+    @Operation(summary = "Update individual document verification status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER_SUPPORT_AGENT')")
+    public ResponseEntity<DriverResponse> updateDocumentVerificationStatus(
+            @PathVariable UUID driverId,
+            @PathVariable String documentType,
+            @RequestParam String status) {
+        log.info("Update document verification status for driver: {}, documentType: {}, status: {}",
+                driverId, documentType, status);
+        DriverResponse response = driverService.updateDocumentVerificationStatus(driverId, documentType, status);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{driverId}/documents/status")
     @Operation(summary = "Get document status and verification progress")
     @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT')")

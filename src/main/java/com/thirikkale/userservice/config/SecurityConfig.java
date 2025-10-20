@@ -33,8 +33,9 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
-// REMOVE @RequiredArgsConstructor
+// @EnableMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity(prePostEnabled = false)
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -60,20 +61,33 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
                         // Authentication endpoints - Allow all
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/otp/**").permitAll()
+                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/login/password",
+                                "/api/v1/auth/login/firebase")
+                        .permitAll()
+                        .requestMatchers("/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
+                        .requestMatchers("/api/v1/auth/register").permitAll()
 
                         // Rider & driver registration (Public)
                         .requestMatchers("/api/v1/riders/register").permitAll()
                         .requestMatchers("/api/v1/drivers/register").permitAll()
 
                         // Admin auth endpoints
-                        .requestMatchers("/api/v1/auth/admin/login", "/api/v1/auth/admin/register-super-admin").permitAll()
-                        .requestMatchers("/api/v1/auth/admin/register").hasRole("ADMIN_ADMIN") // Assuming ADMIN_ADMIN is defined
+                        .requestMatchers("/api/v1/auth/admin/login",
+                                "/api/v1/auth/admin/register-super-admin",
+                                "/api/v1/auth/admin/register",
+                                "/api/v1/auth/admin/verify-email",
+                                "/api/v1/auth/admin/verify-email-page",
+                                "/api/v1/auth/admin/resend-verification",
+                                "/api/v1/auth/admin/users")  // Temporarily public for testing
+                        .permitAll()
 
-                        // Service-to-Service Access for GET rider/driver details
-                        .requestMatchers(HttpMethod.GET, "/api/v1/riders/{id}").hasAnyRole("ADMIN", "SERVICE", "RIDER")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/drivers/{id}").hasAnyRole("ADMIN", "SERVICE", "DRIVER")
+                        // Internal service endpoints - Allow without authentication for admin service
+                        .requestMatchers("/api/v1/drivers/**", "/api/v1/riders/**", "/api/v1/users/**",
+                                "/api/v1/vehicles/**")
+                        .permitAll()
+
+                        // Static file serving - Allow uploads folder
+                        .requestMatchers("/uploads/**").permitAll()
 
                         // Public docs & health
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
@@ -88,11 +102,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/drivers/{id}").hasRole("DRIVER")
 
                         // All other requests require authentication
-                        .anyRequest().authenticated()
-                )
-                .authenticationProvider(authenticationProvider) // Use the injected provider
-                // Correct Filter Order
-                .addFilterBefore(serviceAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                        .anyRequest().authenticated())
+                .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -2,6 +2,8 @@ package com.thirikkale.userservice.model.enums;
 
 public enum AdminRoleType {
     ADMIN,
-    RIDER_SUPPORT_AGENT,
-    DRIVER_SUPPORT_AGENT
+    USER_HANDLER,
+    FINANCE_HANDLER,
+    MARKETING_HANDLER,
+    TRIP_SUPPORT
 }

@@ -60,7 +60,8 @@ public class RiderService {
             // 3. Check if rider already exists first
             if (riderRepository.existsByUser_PhoneNumber(formattedPhone)) {
                 log.warn("Rider already exists for phone: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException("Rider already registered with this phone number");
+                throw new CustomExceptions.UserAlreadyExistsException(
+                        "Rider already registered with this phone number");
             }
 
             // 4. Create or get user - NO NAMES IN REQUEST ANYMORE
@@ -69,7 +70,8 @@ public class RiderService {
             // 5. Final check before creating rider
             if (riderRepository.existsByUser_PhoneNumber(formattedPhone)) {
                 log.warn("Rider was created by another thread for phone: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException("Rider already registered with this phone number");
+                throw new CustomExceptions.UserAlreadyExistsException(
+                        "Rider already registered with this phone number");
             }
 
             // 6. Create new rider using EntityManager for direct persistence
@@ -86,7 +88,8 @@ public class RiderService {
             throw new CustomExceptions.UserAlreadyExistsException("Rider registration failed due to duplicate data");
         } catch (ObjectOptimisticLockingFailureException e) {
             log.error("Concurrent modification during rider registration: {}", e.getMessage());
-            throw new CustomExceptions.UserAlreadyExistsException("Registration failed due to concurrent access. Please try again.");
+            throw new CustomExceptions.UserAlreadyExistsException(
+                    "Registration failed due to concurrent access. Please try again.");
         } catch (Exception e) {
             log.error("Unexpected error during rider registration: {}", e.getMessage(), e);
             throw new RuntimeException("Rider registration failed: " + e.getMessage(), e);
@@ -119,7 +122,7 @@ public class RiderService {
             User newUser = User.builder()
                     .phoneNumber(formattedPhone)
                     .firstName("Rider") // Placeholder - will be updated in profile completion
-                    .lastName("User")   // Placeholder - will be updated in profile completion
+                    .lastName("User") // Placeholder - will be updated in profile completion
                     .email(firebaseUserInfo.getEmail())
                     .isActive(true)
                     .isPhoneVerified(true)
@@ -175,13 +178,11 @@ public class RiderService {
         String accessToken = jwtService.generateAccessToken(
                 rider.getRiderId(),
                 phoneNumber,
-                "RIDER"
-        );
+                "RIDER");
 
         String refreshToken = jwtService.generateRefreshToken(
                 rider.getRiderId(),
-                phoneNumber
-        );
+                phoneNumber);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -261,7 +262,7 @@ public class RiderService {
 
     public List<RiderResponse> getAllRiders() {
         log.info("Getting all riders");
-        return riderRepository.findAll().stream()
+        return riderRepository.findAllWithUsers().stream()
                 .map(this::mapToRiderResponse)
                 .collect(Collectors.toList());
     }
@@ -270,12 +271,14 @@ public class RiderService {
         User user = rider.getUser();
         return RiderResponse.builder()
                 .riderId(rider.getRiderId())
+                .readableId(rider.getReadableId()) // Human-readable ID (R00001)
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .phoneNumber(user.getPhoneNumber())
                 .email(user.getEmail())
                 .dateOfBirth(user.getDateOfBirth())
-                .profilePhotoUrl(user.getProfilePhotoUrl()) // This will now show the selfie URL if gender detection was done
+                .profilePhotoUrl(user.getProfilePhotoUrl()) // This will now show the selfie URL if gender detection was
+                                                            // done
                 .emergencyContactName(user.getEmergencyContactName())
                 .emergencyContactPhone(user.getEmergencyContactPhone())
                 .gender(rider.getGender())

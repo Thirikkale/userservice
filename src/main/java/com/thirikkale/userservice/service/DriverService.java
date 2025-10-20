@@ -47,11 +47,10 @@ public class DriverService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd")
     };
 
-
     // NEW: Add the completeDriverProfileSetup method
     @Transactional
     public AuthResponse completeDriverProfileSetup(UUID driverId, String firstName, String lastName,
-                                                   String whatsappNumber, VehicleType vehicleType) {
+            String whatsappNumber, VehicleType vehicleType) {
         log.info("Completing driver profile setup for: {}", driverId);
 
         Driver driver = driverRepository.findByIdWithUser(driverId)
@@ -70,8 +69,8 @@ public class DriverService {
 
         // // NEW: Set vehicle type
         // if (vehicleType != null) {
-        //     driver.setVehicleType(vehicleType);
-        //     log.info("Vehicle type set to: {}", vehicleType);
+        // driver.setVehicleType(vehicleType);
+        // log.info("Vehicle type set to: {}", vehicleType);
         // }
 
         // Save both entities
@@ -100,10 +99,10 @@ public class DriverService {
                 .loginTime(LocalDateTime.now())
                 .isNewRegistration(false)
                 .registrationMessage("Profile setup completed successfully!")
-                .nextStep(vehicleType != null ? "Start uploading documents" : "Select your vehicle type and upload documents")
+                .nextStep(vehicleType != null ? "Start uploading documents"
+                        : "Select your vehicle type and upload documents")
                 .build();
     }
-
 
     @Transactional
     public AuthResponse registerDriver(DriverRegistrationRequest request) {
@@ -123,7 +122,8 @@ public class DriverService {
             // 3. Check if driver already exists
             if (driverRepository.existsByUser_PhoneNumber(formattedPhone)) {
                 log.warn("Driver already exists for phone: {}", formattedPhone);
-                throw new CustomExceptions.UserAlreadyExistsException("Driver already registered with this phone number");
+                throw new CustomExceptions.UserAlreadyExistsException(
+                        "Driver already registered with this phone number");
             }
 
             // 4. Create or get user - NO NAMES IN REQUEST ANYMORE
@@ -167,7 +167,7 @@ public class DriverService {
             User newUser = User.builder()
                     .phoneNumber(formattedPhone)
                     .firstName("Driver") // Placeholder - will be updated in profile completion
-                    .lastName("User")    // Placeholder - will be updated in profile completion
+                    .lastName("User") // Placeholder - will be updated in profile completion
                     .email(firebaseUserInfo.getEmail())
                     .isActive(true)
                     .isPhoneVerified(true)
@@ -203,13 +203,11 @@ public class DriverService {
         String accessToken = jwtService.generateAccessToken(
                 driver.getDriverId(),
                 phoneNumber,
-                "DRIVER"
-        );
+                "DRIVER");
 
         String refreshToken = jwtService.generateRefreshToken(
                 driver.getDriverId(),
-                phoneNumber
-        );
+                phoneNumber);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -243,6 +241,7 @@ public class DriverService {
         return mapToDriverResponse(driver);
     }
 
+    @Transactional(readOnly = true)
     public DriverResponse getDriverByPhoneNumber(String phoneNumber) {
         log.info("Getting driver by phone: {}", phoneNumber);
 
@@ -252,14 +251,16 @@ public class DriverService {
         return mapToDriverResponse(driver);
     }
 
+    @Transactional(readOnly = true)
     public List<DriverResponse> getAllDrivers() {
         log.info("Getting all drivers");
 
-        return driverRepository.findAll().stream()
+        return driverRepository.findAllWithUsers().stream()
                 .map(this::mapToDriverResponse)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<DriverResponse> getAvailableDrivers() {
         log.info("Getting available drivers");
 
@@ -309,6 +310,48 @@ public class DriverService {
     }
 
     @Transactional
+    public DriverResponse updateDocumentVerificationStatus(UUID driverId, String documentType, String status) {
+        log.info("Updating document verification status for driver: {}, documentType: {}, status: {}",
+                driverId, documentType, status);
+
+        Driver driver = driverRepository.findByIdWithUser(driverId)
+                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+
+        // Update the specific document status
+        switch (documentType.toLowerCase()) {
+            case "selfie":
+                driver.setSelfieVerificationStatus(status);
+                break;
+            case "drivinglicense":
+                driver.setDrivingLicenseVerificationStatus(status);
+                break;
+            case "revenueLicense":
+            case "revenuelicense":
+                if (driver.getPrimaryVehicle() != null) {
+                    driver.getPrimaryVehicle().setRevenueLicenseVerificationStatus(status);
+                }
+                break;
+            case "vehicleregistration":
+                if (driver.getPrimaryVehicle() != null) {
+                    driver.getPrimaryVehicle().setVehicleRegistrationVerificationStatus(status);
+                }
+                break;
+            case "vehicleinsurance":
+                if (driver.getPrimaryVehicle() != null) {
+                    driver.getPrimaryVehicle().setVehicleInsuranceVerificationStatus(status);
+                }
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown document type: " + documentType);
+        }
+
+        driverRepository.save(driver);
+        log.info("Document verification status updated successfully");
+
+        return mapToDriverResponse(driver);
+    }
+
+    @Transactional
     public DriverResponse updateDriverAvailability(UUID driverId, boolean isAvailable) {
         log.info("Updating driver availability: {} - {}", driverId, isAvailable);
 
@@ -328,8 +371,8 @@ public class DriverService {
 
     @Transactional
     public DriverResponse updateDriverProfileFromOCR(UUID driverId, String extractedFirstName,
-                                                     String extractedLastName, String licenseNumber,
-                                                     String licenseExpiry) {
+            String extractedLastName, String licenseNumber,
+            String licenseExpiry) {
         log.info("Updating driver profile from OCR - Driver: {}", driverId);
 
         Driver driver = driverRepository.findByIdWithUser(driverId)
@@ -338,7 +381,8 @@ public class DriverService {
         User user = driver.getUser();
 
         // FIXED: Only update names if they are currently placeholders
-        if ("Driver".equals(user.getFirstName()) && extractedFirstName != null && !extractedFirstName.trim().isEmpty()) {
+        if ("Driver".equals(user.getFirstName()) && extractedFirstName != null
+                && !extractedFirstName.trim().isEmpty()) {
             user.setFirstName(extractedFirstName.trim());
             log.info("Updated first name from OCR: {}", extractedFirstName);
         }
@@ -406,6 +450,7 @@ public class DriverService {
 
         return DriverResponse.builder()
                 .driverId(driver.getDriverId())
+                .readableId(driver.getReadableId()) // Human-readable ID (D00001)
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .phoneNumber(user.getPhoneNumber())
@@ -436,12 +481,24 @@ public class DriverService {
                 .revenueLicenseUrl(driver.getRevenueLicenseUrl()) // From deprecated method
                 .vehicleRegistrationUrl(driver.getVehicleRegistrationUrl()) // From deprecated method
                 .vehicleInsuranceUrl(driver.getVehicleInsuranceUrl()) // From deprecated method
+                // Individual document verification statuses
+                .selfieVerificationStatus(driver.getSelfieVerificationStatus())
+                .drivingLicenseVerificationStatus(driver.getDrivingLicenseVerificationStatus())
+                .revenueLicenseVerificationStatus(driver.getPrimaryVehicle() != null
+                        ? driver.getPrimaryVehicle().getRevenueLicenseVerificationStatus()
+                        : null)
+                .vehicleRegistrationVerificationStatus(driver.getPrimaryVehicle() != null
+                        ? driver.getPrimaryVehicle().getVehicleRegistrationVerificationStatus()
+                        : null)
+                .vehicleInsuranceVerificationStatus(driver.getPrimaryVehicle() != null
+                        ? driver.getPrimaryVehicle().getVehicleInsuranceVerificationStatus()
+                        : null)
                 .faceMatchScore(driver.getFaceMatchScore())
                 .faceVerificationAttempts(driver.getFaceVerificationAttempts())
                 .build();
     }
 
-    //newly added
+    // newly added
     @Transactional
     public DriverResponse updateDriverProfile(UUID driverId, DriverProfileUpdateRequest request) {
         log.info("Updating driver profile: {}", driverId);
@@ -515,7 +572,8 @@ public class DriverService {
         int progress = 0;
 
         // Basic profile (10%)
-        if (driver.getUser() != null && driver.getUser().getFirstName() != null && driver.getUser().getLastName() != null) {
+        if (driver.getUser() != null && driver.getUser().getFirstName() != null
+                && driver.getUser().getLastName() != null) {
             progress += 10;
         }
 

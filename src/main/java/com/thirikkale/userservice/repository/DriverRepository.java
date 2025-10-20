@@ -76,4 +76,8 @@ public interface DriverRepository extends JpaRepository<Driver, UUID> {
     long countTotalVehiclesByDriverId(@Param("driverId") UUID driverId);
 
     boolean existsByLicenseNumber(String licenseNumber);
+
+    // Fetch all drivers with user data (JOIN FETCH to avoid lazy loading issues)
+    @Query("SELECT d FROM Driver d JOIN FETCH d.user")
+    java.util.List<Driver> findAllWithUsers();
 }

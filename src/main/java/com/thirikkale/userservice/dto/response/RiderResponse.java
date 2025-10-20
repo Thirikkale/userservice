@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -18,6 +17,7 @@ import java.util.UUID;
 public class RiderResponse {
 
     private UUID riderId;
+    private String readableId; // Human-readable ID (e.g., R00001, R00002)
     private String firstName;
     private String lastName;
     private String phoneNumber;
