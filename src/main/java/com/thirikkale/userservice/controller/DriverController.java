@@ -197,7 +197,7 @@ public class DriverController {
     // Driver Profile and Status Endpoints
     @GetMapping("/{driverId}")
     @Operation(summary = "Get driver by ID")
-    @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT')")
+    @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN', 'DRIVER_SUPPORT_AGENT', 'SERVICE')")
     public ResponseEntity<DriverResponse> getDriverById(@PathVariable UUID driverId) {
         log.info("Get driver request for ID: {}", driverId);
         DriverResponse response = driverService.getDriverById(driverId);
