@@ -5,6 +5,7 @@ import com.thirikkale.userservice.dto.request.RiderRegistrationRequest;
 import com.thirikkale.userservice.dto.request.RiderProfileUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.GenderDetectionResponse;
+import com.thirikkale.userservice.dto.response.RiderCardResponse;
 import com.thirikkale.userservice.dto.response.RiderResponse;
 import com.thirikkale.userservice.service.GenderDetectionService;
 import com.thirikkale.userservice.service.RiderService;
@@ -162,6 +163,14 @@ public class RiderController {
     public ResponseEntity<List<RiderResponse>> getAllRiders() {
         log.info("Get all riders request");
         List<RiderResponse> response = riderService.getAllRiders();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{riderId}/card")
+    @Operation(summary = "Get rider card details", description = "Public endpoint to get rider name, contact number, and profile picture for display in cards")
+    public ResponseEntity<RiderCardResponse> getRiderCard(@PathVariable UUID riderId) {
+        log.info("Get rider card details request for rider: {}", riderId);
+        RiderCardResponse response = riderService.getRiderCard(riderId);
         return ResponseEntity.ok(response);
     }
 }

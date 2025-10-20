@@ -7,6 +7,7 @@ import com.thirikkale.userservice.dto.request.VehicleRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
 import com.thirikkale.userservice.dto.response.DocumentUploadResponse;
+import com.thirikkale.userservice.dto.response.DriverCardResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
 import com.thirikkale.userservice.dto.response.VehicleResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
@@ -316,6 +317,14 @@ public class DriverController {
         log.info("Update primary vehicle type request for driver: {} - new type: {}",
                 driverId, request.getVehicleType());
         VehicleResponse response = vehicleService.updatePrimaryVehicleType(driverId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{driverId}/card")
+    @Operation(summary = "Get driver card details", description = "Public endpoint to get driver name, contact number, and profile picture for display in cards")
+    public ResponseEntity<DriverCardResponse> getDriverCard(@PathVariable UUID driverId) {
+        log.info("Get driver card details request for driver: {}", driverId);
+        DriverCardResponse response = driverService.getDriverCard(driverId);
         return ResponseEntity.ok(response);
     }
 

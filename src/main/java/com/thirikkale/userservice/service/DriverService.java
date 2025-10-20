@@ -4,6 +4,7 @@ import com.thirikkale.userservice.dto.request.DriverProfileUpdateRequest;
 import com.thirikkale.userservice.dto.request.DriverRegistrationRequest;
 import com.thirikkale.userservice.dto.request.VehicleTypeUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
+import com.thirikkale.userservice.dto.response.DriverCardResponse;
 import com.thirikkale.userservice.dto.response.DriverResponse;
 import com.thirikkale.userservice.model.enums.VehicleType;
 import com.thirikkale.userservice.exception.CustomExceptions;
@@ -250,6 +251,23 @@ public class DriverService {
                 .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
 
         return mapToDriverResponse(driver);
+    }
+
+    public DriverCardResponse getDriverCard(UUID driverId) {
+        log.info("Getting driver card details for driver: {}", driverId);
+        
+        Driver driver = driverRepository.findByIdWithUser(driverId)
+                .orElseThrow(() -> new CustomExceptions.ResourceNotFoundException("Driver not found"));
+
+        String name = driver.getUser().getFirstName() + " " + driver.getUser().getLastName();
+        String contactNumber = driver.getUser().getPhoneNumber();
+        String profilePicUrl = driver.getSelfieUrl();
+
+        return DriverCardResponse.builder()
+                .name(name)
+                .contactNumber(contactNumber)
+                .profilePicUrl(profilePicUrl)
+                .build();
     }
 
     public List<DriverResponse> getAllDrivers() {

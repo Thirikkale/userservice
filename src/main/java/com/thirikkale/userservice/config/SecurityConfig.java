@@ -67,6 +67,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/riders/register").permitAll()
                         .requestMatchers("/api/v1/drivers/register").permitAll()
 
+                        // Public card endpoints for riders and drivers
+                        .requestMatchers("/api/v1/riders/*/card").permitAll()
+                        .requestMatchers("/api/v1/drivers/*/card").permitAll()
+
                         // Admin auth endpoints
                         .requestMatchers("/api/v1/auth/admin/login", "/api/v1/auth/admin/register-super-admin").permitAll()
                         .requestMatchers("/api/v1/auth/admin/register").hasRole("ADMIN_ADMIN") // Assuming ADMIN_ADMIN is defined

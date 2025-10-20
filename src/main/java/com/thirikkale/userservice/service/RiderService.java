@@ -3,6 +3,7 @@ package com.thirikkale.userservice.service;
 import com.thirikkale.userservice.dto.request.RiderRegistrationRequest;
 import com.thirikkale.userservice.dto.request.RiderProfileUpdateRequest;
 import com.thirikkale.userservice.dto.response.AuthResponse;
+import com.thirikkale.userservice.dto.response.RiderCardResponse;
 import com.thirikkale.userservice.dto.response.RiderResponse;
 import com.thirikkale.userservice.exception.CustomExceptions;
 import com.thirikkale.userservice.model.Rider;
@@ -264,6 +265,23 @@ public class RiderService {
         return riderRepository.findAll().stream()
                 .map(this::mapToRiderResponse)
                 .collect(Collectors.toList());
+    }
+
+    public RiderCardResponse getRiderCard(UUID riderId) {
+        log.info("Getting rider card details for rider: {}", riderId);
+        
+        Rider rider = riderRepository.findByIdWithUser(riderId)
+                .orElseThrow(() -> new CustomExceptions.ResourceNotFoundException("Rider not found"));
+
+        String name = rider.getUser().getFirstName() + " " + rider.getUser().getLastName();
+        String contactNumber = rider.getUser().getPhoneNumber();
+        String profilePicUrl = rider.getSelfieUrl();
+
+        return RiderCardResponse.builder()
+                .name(name)
+                .contactNumber(contactNumber)
+                .profilePicUrl(profilePicUrl)
+                .build();
     }
 
     private RiderResponse mapToRiderResponse(Rider rider) {
