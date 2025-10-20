@@ -10,6 +10,7 @@ import com.thirikkale.userservice.model.Admin;
 import com.thirikkale.userservice.model.enums.AdminRoleType;
 import com.thirikkale.userservice.model.enums.AdminStatus;
 import com.thirikkale.userservice.repository.AdminRepository;
+import com.thirikkale.userservice.util.ReadableIdGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -82,6 +83,11 @@ public class AdminService {
         String verificationToken = UUID.randomUUID().toString();
         LocalDateTime tokenExpiry = LocalDateTime.now().plusHours(24); // Token valid for 24 hours
 
+        // Generate readable ID (A00001, A00002, etc.)
+        long nextNumber = adminRepository.getMaxAdminCount() + 1;
+        String readableId = ReadableIdGenerator.generate("A", nextNumber);
+        log.info("Generated readable ID for admin: {}", readableId);
+
         // Create new admin
         Admin admin = Admin.builder()
                 .firstName(request.getFirstName())
@@ -90,6 +96,7 @@ public class AdminService {
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .adminRole(request.getAdminRole())
+                .readableId(readableId) // Set readable ID
                 .status(AdminStatus.PENDING_ACTIVATION) // New admins need activation
                 .emailVerificationToken(verificationToken)
                 .emailVerificationTokenExpiry(tokenExpiry)
@@ -118,6 +125,7 @@ public class AdminService {
                 .success(true)
                 .message("Admin user registered successfully. Please check your email to verify your account.")
                 .adminId(admin.getAdminId())
+                .readableId(admin.getReadableId()) // Include readable ID
                 .email(admin.getEmail())
                 .firstName(admin.getFirstName())
                 .lastName(admin.getLastName())
@@ -415,6 +423,7 @@ public class AdminService {
                 .success(true)
                 .message("Admin user found")
                 .adminId(admin.getAdminId())
+                .readableId(admin.getReadableId()) // Include readable ID
                 .email(admin.getEmail())
                 .firstName(admin.getFirstName())
                 .lastName(admin.getLastName())

@@ -19,6 +19,7 @@ public class AdminRegistrationResponse {
     private boolean success;
     private String message;
     private UUID adminId;
+    private String readableId; // Human-readable ID like A00001, A00002
     private String email;
     private String firstName;
     private String lastName;

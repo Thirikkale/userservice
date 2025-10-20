@@ -106,4 +106,10 @@ public interface AdminRepository extends JpaRepository<Admin, UUID> {
      */
     @Query("SELECT COUNT(a) FROM Admin a WHERE a.status IN ('ACTIVATED', 'ONLINE')")
     long countActiveAdmins();
+
+    /**
+     * Get the maximum admin number for generating next readableId
+     */
+    @Query("SELECT COUNT(a) FROM Admin a")
+    long getMaxAdminCount();
 }

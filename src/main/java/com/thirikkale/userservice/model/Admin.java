@@ -39,6 +39,9 @@ public class Admin {
     @Column(name = "admin_id")
     private UUID adminId;
 
+    @Column(name = "readable_id", unique = true, length = 20)
+    private String readableId; // Human-readable ID like "A00001", "A00002"
+
     @NotBlank(message = "First name is required")
     @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
