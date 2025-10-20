@@ -149,7 +149,7 @@ public class RiderController {
 
     @GetMapping("/{riderId}")
     @Operation(summary = "Get rider by ID")
-    @PreAuthorize("hasAnyRole('RIDER', 'ADMIN', 'RIDER_SUPPORT_AGENT')")
+    @PreAuthorize("hasAnyRole('RIDER', 'ADMIN', 'RIDER_SUPPORT_AGENT', 'SERVICE')")
     public ResponseEntity<RiderResponse> getRiderById(@PathVariable UUID riderId) {
         log.info("Get rider request for ID: {}", riderId);
         RiderResponse response = riderService.getRiderById(riderId);

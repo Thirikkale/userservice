@@ -233,8 +233,10 @@ public class DriverService {
     public DriverResponse getDriverById(UUID driverId) {
         log.info("Getting driver by ID: {}", driverId);
 
-        Driver driver = driverRepository.findByIdWithUser(driverId)
-                .orElseThrow(() -> new CustomExceptions.UserNotFoundException("Driver not found"));
+        // Use findByIdWithVehicles instead of findById
+        Driver driver = driverRepository.findByIdWithVehicles(driverId)
+                .orElseThrow(() -> new CustomExceptions.ResourceNotFoundException(
+                        "Driver not found with ID: " + driverId));
 
         return mapToDriverResponse(driver);
     }
