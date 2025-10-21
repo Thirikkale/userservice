@@ -1,7 +1,6 @@
 package com.thirikkale.userservice.config;
 
 import com.thirikkale.userservice.security.JwtAuthenticationFilter;
-import com.thirikkale.userservice.security.ServiceAuthFilter;
 // REMOVE Lombok import if not needed
 // import lombok.RequiredArgsConstructor;
 // import org.springframework.beans.factory.annotation.Value; // REMOVE if serviceAuthSecret field is removed
@@ -35,20 +34,17 @@ import java.util.List;
 @EnableWebSecurity
 // @EnableMethodSecurity(prePostEnabled = true)
 @EnableMethodSecurity(prePostEnabled = false)
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final ServiceAuthFilter serviceAuthFilter;
     // REMOVE UserDetailsService injection
     private final AuthenticationProvider authenticationProvider; // Keep this
 
     // Explicit Constructor
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                          ServiceAuthFilter serviceAuthFilter,
                           AuthenticationProvider authenticationProvider) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.serviceAuthFilter = serviceAuthFilter;
         this.authenticationProvider = authenticationProvider;
     }
 
@@ -103,7 +99,7 @@ public class SecurityConfig {
 
                         // All other requests require authentication
                         .anyRequest().authenticated())
-                .authenticationProvider(authenticationProvider())
+                .authenticationProvider(authenticationProvider)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
